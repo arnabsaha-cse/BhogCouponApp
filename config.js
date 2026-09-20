@@ -17,14 +17,14 @@ const CONFIG = {
     //   Apps Script Editor > Deploy > New deployment > Web app
     //   Copy the URL (looks like: https://script.google.com/macros/s/AKfycb.../exec)
     //
-    APPS_SCRIPT_URL: 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE',
+    APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbz30kJPE9xltUByyu_rlRdA27xPB4Tcwc0twnyscaS64Tt9w9_yz3cK2KsE-hTPkp4loA/exec',
 
     // ──────────────────────────────────────────────────────────
     // Base URL where this app is hosted
     // ──────────────────────────────────────────────────────────
     // Used to generate coupon page links in QR codes.
     // Examples:
-    //   GitHub Pages:  'https://yourusername.github.io/FoodCouponApp'
+    //   GitHub Pages:  'https://arnabsaha-cse.github.io/BhogCouponApp'
     //   Local testing: '' (empty string — uses relative paths)
     //
     BASE_URL: '',

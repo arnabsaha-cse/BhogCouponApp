@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Food Distribution - Admin</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f6fa;
+            min-height: 100vh;
+        }
+
+        /* Login screen */
+        .login-screen {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+        }
+
+        .login-card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 360px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+
+        .login-card h1 { font-size: 20px; margin-bottom: 8px; color: #1a1a2e; }
+        .login-card p { font-size: 14px; color: #666; margin-bottom: 20px; }
+
+        .login-card input {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 24px;
+            text-align: center;
+            letter-spacing: 8px;
+            outline: none;
+            margin-bottom: 16px;
+        }
+
+        .login-card input:focus { border-color: #3498db; }
+
+        .login-card button {
+            width: 100%;
+            padding: 14px;
+            background: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .login-error {
+            color: #e74c3c;
+            font-size: 13px;
+            margin-top: 8px;
+            display: none;
+        }
+
+        /* Admin panel */
+        .admin-panel { display: none; }
+
+        .admin-header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: #fff;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .admin-header h1 { font-size: 18px; }
+
+        .btn-logout {
+            background: rgba(255,255,255,0.2);
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        /* Stats bar */
+        .stats-bar {
+            display: flex;
+            gap: 12px;
+            padding: 16px 20px;
+            overflow-x: auto;
+        }
+
+        .stat-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 14px 18px;
+            min-width: 120px;
+            flex: 1;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            text-align: center;
+        }
+
+        .stat-card .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+
+        .stat-card .stat-label {
+            font-size: 12px;
+            color: #999;
+            margin-top: 2px;
+        }
+
+        .stat-card.green .stat-value { color: #27ae60; }
+        .stat-card.blue .stat-value { color: #3498db; }
+        .stat-card.orange .stat-value { color: #f39c12; }
+
+        /* Tab navigation */
+        .tabs {
+            display: flex;
+            padding: 0 20px;
+            gap: 0;
+            border-bottom: 2px solid #e0e0e0;
+            background: #fff;
+        }
+
+        .tab-btn {
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            border: none;
+            background: none;
+            cursor: pointer;
+            color: #999;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            color: #3498db;
+            border-bottom-color: #3498db;
+        }
+
+        /* Tab content */
+        .tab-content { display: none; padding: 20px; }
+        .tab-content.active { display: block; }
+
+        /* Scanner tab */
+        .scanner-area {
+            max-width: 400px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        #qr-reader {
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .btn-scan {
+            width: 100%;
+            padding: 14px;
+            background: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 12px;
+        }
+
+        .btn-scan.scanning {
+            background: #e74c3c;
+        }
+
+        .scan-result {
+            display: none;
+            background: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            margin-top: 16px;
+        }
+
+        .scan-result.show { display: block; }
+
+        .scan-result .result-header {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .scan-result .result-details {
+            text-align: left;
+            line-height: 1.8;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .scan-result .result-details span { font-weight: 600; }
+
+        .btn-redeem {
+            width: 100%;
+            padding: 14px;
+            background: #27ae60;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-redeem:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .result-valid { border-left: 4px solid #27ae60; }
+        .result-redeemed { border-left: 4px solid #e74c3c; }
+        .result-notfound { border-left: 4px solid #f39c12; }
+
+        /* Search tab */
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 12px 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 15px;
+            outline: none;
+        }
+
+        .search-box input:focus { border-color: #3498db; }
+
+        .search-box button {
+            padding: 12px 20px;
+            background: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .search-result-item {
+            background: #fff;
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .search-result-item .info { flex: 1; }
+        .search-result-item .info .name { font-weight: 600; font-size: 15px; }
+        .search-result-item .info .meta { font-size: 13px; color: #666; margin-top: 2px; }
+        .search-result-item .code {
+            font-weight: 700;
+            font-size: 14px;
+            color: #667eea;
+            margin-left: 12px;
+        }
+
+        .search-result-item .actions { margin-left: 12px; }
+
+        .btn-small-redeem {
+            padding: 8px 16px;
+            background: #27ae60;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-small-redeem.redeemed {
+            background: #ccc;
+            cursor: default;
+        }
+
+        .no-results {
+            text-align: center;
+            color: #999;
+            padding: 40px;
+            font-size: 14px;
+        }
+
+        /* Date filter */
+        .filter-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+            align-items: center;
+        }
+
+        .filter-bar select {
+            padding: 10px 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 14px;
+            outline: none;
+            flex: 1;
+        }
+
+        .filter-bar .btn-refresh {
+            padding: 10px 16px;
+            background: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        /* Manual entry */
+        .manual-entry {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .manual-entry input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 15px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            outline: none;
+        }
+
+        .manual-entry button {
+            padding: 12px 20px;
+            background: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div class="login-screen" id="loginScreen">
+    <div class="login-card">
+        <h1>🔐 Admin Access</h1>
+        <p>Enter the 4-digit PIN to continue</p>
+        <input type="password" id="pinInput" maxlength="4" placeholder="• • • •" inputmode="numeric"
+               onkeypress="if(event.key==='Enter') loginAdmin()">
+        <button onclick="loginAdmin()">Enter</button>
+        <p class="login-error" id="loginError">Incorrect PIN. Try again.</p>
+    </div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div class="admin-panel" id="adminPanel">
+    <!-- Header -->
+    <div class="admin-header">
+        <h1>🍽️ Food Distribution Admin</h1>
+        <button class="btn-logout" onclick="logoutAdmin()">Logout</button>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-bar">
+        <div class="stat-card blue">
+            <div class="stat-value" id="statTotal">0</div>
+            <div class="stat-label">Registered</div>
+        </div>
+        <div class="stat-card green">
+            <div class="stat-value" id="statRedeemed">0</div>
+            <div class="stat-label">Redeemed</div>
+        </div>
+        <div class="stat-card orange">
+            <div class="stat-value" id="statPending">0</div>
+            <div class="stat-label">Pending</div>
+        </div>
+    </div>
+
+    <!-- Date filter -->
+    <div class="filter-bar" style="padding: 0 20px;">
+        <select id="dateFilter" onchange="refreshData()">
+            <option value="all">All Dates</option>
+        </select>
+        <button class="btn-refresh" onclick="refreshData()">🔄 Refresh</button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('scanner')">📷 Scanner</button>
+        <button class="tab-btn" onclick="switchTab('search')">🔍 Search</button>
+        <button class="tab-btn" onclick="switchTab('list')">📋 All Entries</button>
+    </div>
+
+    <!-- SCANNER TAB -->
+    <div class="tab-content active" id="tab-scanner">
+        <div class="scanner-area">
+            <div id="qr-reader"></div>
+            <button class="btn-scan" id="scanBtn" onclick="toggleScanner()">📷 Start Scanner</button>
+
+            <p style="color:#999; font-size:13px; margin: 8px 0 16px;">— or enter code manually —</p>
+
+            <div class="manual-entry">
+                <input type="text" id="manualCode" placeholder="BHOG-XXXX" maxlength="9"
+                       onkeypress="if(event.key==='Enter') lookupManual()">
+                <button onclick="lookupManual()">Verify</button>
+            </div>
+
+            <!-- Scan result -->
+            <div class="scan-result" id="scanResult">
+                <div class="result-header" id="resultHeader"></div>
+                <div class="result-details" id="resultDetails"></div>
+                <button class="btn-redeem" id="redeemBtn" onclick="redeemCoupon()">
+                    ✅ Mark as Redeemed
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SEARCH TAB -->
+    <div class="tab-content" id="tab-search">
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Search by name, phone, or code..."
+                   onkeypress="if(event.key==='Enter') searchEntries()">
+            <button onclick="searchEntries()">Search</button>
+        </div>
+        <div id="searchResults">
+            <div class="no-results">Search by name, phone number, or coupon code</div>
+        </div>
+    </div>
+
+    <!-- ALL ENTRIES TAB -->
+    <div class="tab-content" id="tab-list">
+        <div id="allEntries">
+            <div class="no-results">Loading entries...</div>
+        </div>
+    </div>
+</div>
+
+<!-- QR Scanner Library -->
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<!-- Shared config (update config.js instead of editing this file) -->
+<script src="config.js"></script>
+
+<script>
+    // ============================================================
+    // Data cache
+    // ============================================================
+    let allData = [];
+    let currentScanCode = null;
+    let html5QrCode = null;
+    let isScanning = false;
+
+    // ============================================================
+    // Login / Logout
+    // ============================================================
+    function loginAdmin() {
+        const pin = document.getElementById('pinInput').value;
+        if (pin === CONFIG.ADMIN_PIN) {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('adminPanel').style.display = 'block';
+            populateDateFilter();
+            refreshData();
+        } else {
+            document.getElementById('loginError').style.display = 'block';
+            document.getElementById('pinInput').value = '';
+            document.getElementById('pinInput').focus();
+        }
+    }
+
+    function logoutAdmin() {
+        if (isScanning) toggleScanner();
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.getElementById('adminPanel').style.display = 'none';
+        document.getElementById('pinInput').value = '';
+    }
+
+    // ============================================================
+    // Date filter
+    // ============================================================
+    function populateDateFilter() {
+        const select = document.getElementById('dateFilter');
+        CONFIG.EVENT_DATES.forEach(dateStr => {
+            const d = new Date(dateStr + 'T00:00:00');
+            const option = document.createElement('option');
+            option.value = dateStr;
+            option.textContent = d.toLocaleDateString('en-US', {
+                weekday: 'short', month: 'short', day: 'numeric'
+            });
+            select.appendChild(option);
+        });
+    }
+
+    // ============================================================
+    // Tab switching
+    // ============================================================
+    function switchTab(tabName) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+
+        event.target.classList.add('active');
+        document.getElementById('tab-' + tabName).classList.add('active');
+
+        // Stop scanner when switching away
+        if (tabName !== 'scanner' && isScanning) {
+            toggleScanner();
+        }
+    }
+
+    // ============================================================
+    // Data fetching
+    // ============================================================
+    async function refreshData() {
+        const dateFilter = document.getElementById('dateFilter').value;
+
+        try {
+            const url = CONFIG.APPS_SCRIPT_URL + '?' + new URLSearchParams({
+                action: 'list',
+                date: dateFilter
+            }).toString();
+
+            const resp = await fetch(url);
+            const result = await resp.json();
+
+            if (result.status === 'success') {
+                allData = result.data || [];
+                updateStats();
+                renderAllEntries();
+            }
+        } catch (err) {
+            console.error('Refresh error:', err);
+        }
+    }
+
+    function updateStats() {
+        const total = allData.length;
+        const redeemed = allData.filter(d => d.redeemed).length;
+        const pending = total - redeemed;
+
+        document.getElementById('statTotal').textContent = total;
+        document.getElementById('statRedeemed').textContent = redeemed;
+        document.getElementById('statPending').textContent = pending;
+    }
+
+    // ============================================================
+    // QR Scanner
+    // ============================================================
+    function toggleScanner() {
+        const btn = document.getElementById('scanBtn');
+
+        if (isScanning) {
+            html5QrCode.stop().then(() => {
+                isScanning = false;
+                btn.textContent = '📷 Start Scanner';
+                btn.classList.remove('scanning');
+            }).catch(err => console.error('Stop error:', err));
+        } else {
+            if (!html5QrCode) {
+                html5QrCode = new Html5Qrcode('qr-reader');
+            }
+
+            html5QrCode.start(
+                { facingMode: 'environment' },
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                onScanSuccess,
+                onScanError
+            ).then(() => {
+                isScanning = true;
+                btn.textContent = '⏹️ Stop Scanner';
+                btn.classList.add('scanning');
+            }).catch(err => {
+                console.error('Camera error:', err);
+                alert('Could not access camera. Please allow camera permission and try again.');
+            });
+        }
+    }
+
+    function onScanSuccess(decodedText) {
+        // The QR might contain a URL like coupon.html?code=BHOG-XXXX or just the code
+        let code = decodedText;
+
+        // Extract code from URL if needed
+        if (decodedText.includes('code=')) {
+            const url = new URL(decodedText);
+            code = url.searchParams.get('code');
+        }
+
+        // Also handle if QR just contains the raw code like BHOG-A3X7
+        if (code && code.match(/^(BHOG|TEST)-[A-Z0-9]{4}$/)) {
+            // Stop scanner after successful scan
+            if (isScanning) toggleScanner();
+
+            // Vibrate for feedback
+            if (navigator.vibrate) navigator.vibrate(200);
+
+            lookupCode(code);
+        }
+    }
+
+    function onScanError(errorMessage) {
+        // Ignore scan errors (they happen continuously until a QR is found)
+    }
+
+    // ============================================================
+    // Manual code entry
+    // ============================================================
+    function lookupManual() {
+        const code = document.getElementById('manualCode').value.trim().toUpperCase();
+        if (!code) return;
+        lookupCode(code);
+    }
+
+    // ============================================================
+    // Coupon lookup
+    // ============================================================
+    async function lookupCode(code) {
+        currentScanCode = code;
+        const resultDiv = document.getElementById('scanResult');
+        const headerDiv = document.getElementById('resultHeader');
+        const detailsDiv = document.getElementById('resultDetails');
+        const redeemBtn = document.getElementById('redeemBtn');
+
+        resultDiv.className = 'scan-result show';
+        headerDiv.textContent = '⏳ Looking up...';
+        detailsDiv.textContent = '';
+        redeemBtn.style.display = 'none';
+
+        try {
+            const url = CONFIG.APPS_SCRIPT_URL + '?' + new URLSearchParams({
+                action: 'lookup',
+                code: code
+            }).toString();
+
+            const resp = await fetch(url);
+            const result = await resp.json();
+
+            if (result.status === 'found') {
+                if (result.redeemed) {
+                    resultDiv.className = 'scan-result show result-redeemed';
+                    headerDiv.textContent = '⚠️ Already Redeemed';
+                    detailsDiv.innerHTML = `
+                        <span>Name:</span> ${result.name}<br>
+                        <span>Phone:</span> ${result.phone}<br>
+                        <span>Date:</span> ${result.date}<br>
+                        <span>Plates:</span> ${result.plates}<br>
+                        <span>Code:</span> ${result.couponCode}<br>
+                        <span>Redeemed at:</span> ${result.redeemedAt || 'Unknown'}
+                    `;
+                    redeemBtn.style.display = 'none';
+                } else {
+                    resultDiv.className = 'scan-result show result-valid';
+                    headerDiv.textContent = '✅ Valid Coupon';
+                    detailsDiv.innerHTML = `
+                        <span>Name:</span> ${result.name}<br>
+                        <span>Phone:</span> ${result.phone}<br>
+                        <span>Date:</span> ${result.date}<br>
+                        <span>Plates:</span> ${result.plates}<br>
+                        <span>Code:</span> ${result.couponCode}
+                    `;
+                    redeemBtn.style.display = 'block';
+                    redeemBtn.disabled = false;
+                    redeemBtn.textContent = '✅ Mark as Redeemed — Give ' + result.plates + ' plate(s)';
+                }
+            } else {
+                resultDiv.className = 'scan-result show result-notfound';
+                headerDiv.textContent = '❌ Coupon Not Found';
+                detailsDiv.textContent = 'Code "' + code + '" does not exist. Check the code and try again.';
+                redeemBtn.style.display = 'none';
+            }
+        } catch (err) {
+            console.error('Lookup error:', err);
+            resultDiv.className = 'scan-result show result-notfound';
+            headerDiv.textContent = '⚠️ Connection Error';
+            detailsDiv.textContent = 'Could not connect to server. Check your internet and try again.';
+            redeemBtn.style.display = 'none';
+        }
+    }
+
+    // ============================================================
+    // Redeem coupon
+    // ============================================================
+    async function redeemCoupon() {
+        if (!currentScanCode) return;
+
+        const redeemBtn = document.getElementById('redeemBtn');
+        redeemBtn.disabled = true;
+        redeemBtn.textContent = '⏳ Redeeming...';
+
+        try {
+            const url = CONFIG.APPS_SCRIPT_URL + '?' + new URLSearchParams({
+                action: 'redeem',
+                code: currentScanCode
+            }).toString();
+
+            const resp = await fetch(url);
+            const result = await resp.json();
+
+            if (result.status === 'success') {
+                const resultDiv = document.getElementById('scanResult');
+                const headerDiv = document.getElementById('resultHeader');
+                resultDiv.className = 'scan-result show result-redeemed';
+                headerDiv.textContent = '🎉 Redeemed Successfully!';
+                redeemBtn.textContent = '✅ Done — Plates Given';
+                redeemBtn.disabled = true;
+
+                // Vibrate for confirmation
+                if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+
+                // Refresh data in background
+                refreshData();
+            } else {
+                alert('Redeem failed: ' + (result.message || 'Unknown error'));
+                redeemBtn.disabled = false;
+                redeemBtn.textContent = '✅ Mark as Redeemed';
+            }
+        } catch (err) {
+            console.error('Redeem error:', err);
+            alert('Connection error. Please try again.');
+            redeemBtn.disabled = false;
+            redeemBtn.textContent = '✅ Mark as Redeemed';
+        }
+    }
+
+    // ============================================================
+    // Search
+    // ============================================================
+    function searchEntries() {
+        const query = document.getElementById('searchInput').value.trim().toLowerCase();
+        if (!query) return;
+
+        const results = allData.filter(d =>
+            d.name.toLowerCase().includes(query) ||
+            d.phone.includes(query) ||
+            d.couponCode.toLowerCase().includes(query)
+        );
+
+        renderSearchResults(results);
+    }
+
+    function renderSearchResults(results) {
+        const container = document.getElementById('searchResults');
+
+        if (results.length === 0) {
+            container.innerHTML = '<div class="no-results">No results found</div>';
+            return;
+        }
+
+        container.innerHTML = results.map(d => `
+            <div class="search-result-item">
+                <div class="info">
+                    <div class="name">${d.name}</div>
+                    <div class="meta">${d.phone} · ${d.date} · ${d.plates} plate(s)</div>
+                </div>
+                <div class="code">${d.couponCode}</div>
+                <div class="actions">
+                    ${d.redeemed
+                        ? '<button class="btn-small-redeem redeemed">✅ Done</button>'
+                        : `<button class="btn-small-redeem" onclick="redeemFromList('${d.couponCode}', this)">Redeem</button>`
+                    }
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // ============================================================
+    // All entries list
+    // ============================================================
+    function renderAllEntries() {
+        const container = document.getElementById('allEntries');
+
+        if (allData.length === 0) {
+            container.innerHTML = '<div class="no-results">No registrations found</div>';
+            return;
+        }
+
+        container.innerHTML = allData.map(d => `
+            <div class="search-result-item">
+                <div class="info">
+                    <div class="name">${d.name}</div>
+                    <div class="meta">${d.phone} · ${d.date} · ${d.plates} plate(s)</div>
+                </div>
+                <div class="code">${d.couponCode}</div>
+                <div class="actions">
+                    ${d.redeemed
+                        ? '<button class="btn-small-redeem redeemed">✅ Done</button>'
+                        : `<button class="btn-small-redeem" onclick="redeemFromList('${d.couponCode}', this)">Redeem</button>`
+                    }
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // ============================================================
+    // Redeem from list/search
+    // ============================================================
+    async function redeemFromList(code, btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳...';
+
+        try {
+            const url = CONFIG.APPS_SCRIPT_URL + '?' + new URLSearchParams({
+                action: 'redeem',
+                code: code
+            }).toString();
+
+            const resp = await fetch(url);
+            const result = await resp.json();
+
+            if (result.status === 'success') {
+                btn.textContent = '✅ Done';
+                btn.classList.add('redeemed');
+
+                // Update local data
+                const entry = allData.find(d => d.couponCode === code);
+                if (entry) entry.redeemed = true;
+                updateStats();
+            } else {
+                btn.textContent = 'Retry';
+                btn.disabled = false;
+            }
+        } catch (err) {
+            btn.textContent = 'Retry';
+            btn.disabled = false;
+        }
+    }
+</script>
+
+</body>
+</html>

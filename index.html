@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Food Distribution - Register</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            padding: 32px;
+            max-width: 420px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .header .icon { font-size: 48px; margin-bottom: 8px; }
+
+        .header h1 {
+            font-size: 22px;
+            color: #1a1a2e;
+            margin-bottom: 4px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 6px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 15px;
+            transition: border-color 0.2s;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            border-color: #667eea;
+        }
+
+        .form-group .error-text {
+            color: #e74c3c;
+            font-size: 12px;
+            margin-top: 4px;
+            display: none;
+        }
+
+        .plates-selector {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .plates-selector label {
+            flex: 1;
+            min-width: 60px;
+            text-align: center;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .plates-selector input[type="radio"] {
+            display: none;
+        }
+
+        .plates-selector input[type="radio"]:checked + span {
+            /* handled by JS */
+        }
+
+        .plates-selector label.selected {
+            border-color: #667eea;
+            background: #667eea;
+            color: #fff;
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+            margin-top: 8px;
+        }
+
+        .btn-submit:hover { opacity: 0.9; }
+        .btn-submit:active { transform: scale(0.98); }
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid #fff;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .note {
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            margin-top: 16px;
+        }
+
+        /* Success overlay */
+        .success-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .success-overlay.show {
+            display: flex;
+        }
+
+        .success-card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+
+        .success-card .checkmark { font-size: 56px; margin-bottom: 12px; }
+
+        .success-card h2 {
+            color: #27ae60;
+            font-size: 22px;
+            margin-bottom: 8px;
+        }
+
+        .success-card .coupon-code {
+            background: #f0f4ff;
+            border: 2px dashed #667eea;
+            border-radius: 10px;
+            padding: 16px;
+            margin: 16px 0;
+            font-size: 28px;
+            font-weight: 700;
+            color: #1a1a2e;
+            letter-spacing: 3px;
+        }
+
+        .success-card .details {
+            text-align: left;
+            background: #f9f9f9;
+            border-radius: 10px;
+            padding: 14px;
+            margin: 16px 0;
+            font-size: 14px;
+            line-height: 1.8;
+        }
+
+        .success-card .details span { font-weight: 600; }
+
+        .success-card .qr-container {
+            margin: 16px auto;
+        }
+
+        .success-card .qr-container canvas {
+            border-radius: 8px;
+        }
+
+        .success-card .msg-note {
+            font-size: 13px;
+            color: #666;
+            margin-top: 12px;
+            line-height: 1.5;
+        }
+
+        .success-card .msg-note strong {
+            color: #333;
+        }
+
+        .btn-screenshot {
+            display: inline-block;
+            padding: 10px 24px;
+            background: #27ae60;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 12px;
+        }
+
+        .btn-new {
+            display: inline-block;
+            padding: 10px 24px;
+            background: #667eea;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 8px;
+            margin-left: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <div class="icon">🍽️</div>
+        <h1>Free Food Distribution</h1>
+        <p>Register to receive your food coupon</p>
+    </div>
+
+    <form id="regForm" novalidate>
+        <div class="form-group">
+            <label for="name">Full Name *</label>
+            <input type="text" id="name" placeholder="Enter your full name" required autocomplete="name">
+            <div class="error-text" id="nameError">Please enter your name</div>
+        </div>
+
+        <div class="form-group">
+            <label for="phone">Phone Number *</label>
+            <input type="tel" id="phone" placeholder="Enter phone number" required autocomplete="tel">
+            <div class="error-text" id="phoneError">Please enter a valid phone number</div>
+        </div>
+
+        <div class="form-group">
+            <label for="date">Distribution Date *</label>
+            <select id="date" required>
+                <option value="">Select a date</option>
+                <!-- Dates will be populated by JS -->
+            </select>
+            <div class="error-text" id="dateError">Please select a date</div>
+        </div>
+
+        <div class="form-group">
+            <label>Number of Plates *</label>
+            <div class="plates-selector" id="platesSelector">
+                <label class="selected" onclick="selectPlates(this, 1)">
+                    <input type="radio" name="plates" value="1" checked>
+                    <span>1</span>
+                </label>
+                <label onclick="selectPlates(this, 2)">
+                    <input type="radio" name="plates" value="2">
+                    <span>2</span>
+                </label>
+                <label onclick="selectPlates(this, 3)">
+                    <input type="radio" name="plates" value="3">
+                    <span>3</span>
+                </label>
+                <label onclick="selectPlates(this, 4)">
+                    <input type="radio" name="plates" value="4">
+                    <span>4</span>
+                </label>
+                <label onclick="selectPlates(this, 5)">
+                    <input type="radio" name="plates" value="5">
+                    <span>5</span>
+                </label>
+            </div>
+        </div>
+
+        <button type="submit" class="btn-submit" id="submitBtn">
+            Get My Food Coupon
+        </button>
+    </form>
+
+    <p class="note">Your information is used only for food distribution. We do not share your data.</p>
+</div>
+
+<!-- Success Overlay -->
+<div class="success-overlay" id="successOverlay">
+    <div class="success-card">
+        <div class="checkmark">✅</div>
+        <h2>Registration Successful!</h2>
+        <p>Show this coupon to the organizer</p>
+
+        <div class="coupon-code" id="couponCodeDisplay">BHOG-XXXX</div>
+
+        <div class="details">
+            <span>Name:</span> <span id="successName"></span><br>
+            <span>Phone:</span> <span id="successPhone"></span><br>
+            <span>Date:</span> <span id="successDate"></span><br>
+            <span>Plates:</span> <span id="successPlates"></span>
+        </div>
+
+        <div class="qr-container" id="qrContainer"></div>
+
+        <p class="msg-note">
+            <strong>📱 A WhatsApp message / SMS</strong> with this coupon has been sent to your phone.
+            You can also screenshot this page.
+        </p>
+
+        <div>
+            <button class="btn-screenshot" onclick="screenshotHint()">📸 Screenshot This</button>
+            <button class="btn-new" onclick="newRegistration()">+ New Registration</button>
+        </div>
+    </div>
+</div>
+
+<!-- QR Code library -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+
+<!-- Shared config (update config.js instead of editing this file) -->
+<script src="config.js"></script>
+
+<script>
+    // ============================================================
+    // Populate date dropdown
+    // ============================================================
+    const dateSelect = document.getElementById('date');
+    CONFIG.EVENT_DATES.forEach(dateStr => {
+        const d = new Date(dateStr + 'T00:00:00');
+        const option = document.createElement('option');
+        option.value = dateStr;
+        option.textContent = d.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+        dateSelect.appendChild(option);
+    });
+
+    // ============================================================
+    // Plate selector
+    // ============================================================
+    let selectedPlates = 1;
+
+    function selectPlates(el, num) {
+        selectedPlates = num;
+        document.querySelectorAll('.plates-selector label').forEach(l => l.classList.remove('selected'));
+        el.classList.add('selected');
+    }
+
+    // ============================================================
+    // Form validation
+    // ============================================================
+    function validateForm() {
+        let valid = true;
+        const name = document.getElementById('name').value.trim();
+        const phone = document.getElementById('phone').value.trim();
+        const date = document.getElementById('date').value;
+
+        // Name validation
+        if (!name || name.length < 2) {
+            document.getElementById('nameError').style.display = 'block';
+            valid = false;
+        } else {
+            document.getElementById('nameError').style.display = 'none';
+        }
+
+        // Phone validation (at least 7 digits)
+        const phoneClean = phone.replace(/[^0-9+]/g, '');
+        if (!phoneClean || phoneClean.replace(/\+/g, '').length < 7) {
+            document.getElementById('phoneError').style.display = 'block';
+            valid = false;
+        } else {
+            document.getElementById('phoneError').style.display = 'none';
+        }
+
+        // Date validation
+        if (!date) {
+            document.getElementById('dateError').style.display = 'block';
+            valid = false;
+        } else {
+            document.getElementById('dateError').style.display = 'none';
+        }
+
+        return valid;
+    }
+
+    // ============================================================
+    // Form submission
+    // ============================================================
+    document.getElementById('regForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        if (!validateForm()) return;
+
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Submitting...';
+
+        const formData = {
+            name: document.getElementById('name').value.trim(),
+            phone: document.getElementById('phone').value.trim(),
+            date: document.getElementById('date').value,
+            plates: selectedPlates
+        };
+
+        try {
+            const response = await fetch(CONFIG.APPS_SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+
+            // With no-cors mode, we can't read the response.
+            // For a real deployment, use the Apps Script JSONP approach or
+            // deploy as a web app that returns JSONP/redirect.
+            // For now, we'll use a workaround with URL parameters.
+
+            // Alternative: Use fetch with redirect following
+            const scriptUrl = CONFIG.APPS_SCRIPT_URL + '?' + new URLSearchParams({
+                action: 'register',
+                name: formData.name,
+                phone: formData.phone,
+                date: formData.date,
+                plates: formData.plates
+            }).toString();
+
+            const resp = await fetch(scriptUrl);
+            const result = await resp.json();
+
+            if (result.status === 'success') {
+                showSuccess(result);
+            } else if (result.status === 'duplicate') {
+                alert('⚠️ This phone number is already registered for ' + formData.date + '.\n\nYour existing coupon code: ' + result.couponCode);
+                btn.disabled = false;
+                btn.innerHTML = 'Get My Food Coupon';
+            } else {
+                throw new Error(result.message || 'Registration failed');
+            }
+        } catch (err) {
+            console.error('Submission error:', err);
+            alert('Something went wrong. Please try again. If the problem persists, contact the organizer.');
+            btn.disabled = false;
+            btn.innerHTML = 'Get My Food Coupon';
+        }
+    });
+
+    // ============================================================
+    // Show success screen
+    // ============================================================
+    function showSuccess(result) {
+        document.getElementById('couponCodeDisplay').textContent = result.couponCode;
+        document.getElementById('successName').textContent = result.name;
+        document.getElementById('successPhone').textContent = result.phone;
+        document.getElementById('successDate').textContent = new Date(result.date + 'T00:00:00').toLocaleDateString('en-US', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        });
+        document.getElementById('successPlates').textContent = result.plates;
+
+        // Generate QR code pointing to coupon page
+        const baseUrl = CONFIG.BASE_URL || (window.location.origin + window.location.pathname.replace(/\/[^/]*$/, ''));
+        const couponUrl = baseUrl + '/coupon.html?code=' + result.couponCode;
+        const qrContainer = document.getElementById('qrContainer');
+        qrContainer.innerHTML = '';
+
+        QRCode.toCanvas(document.createElement('canvas'), couponUrl, {
+            width: 200,
+            margin: 2,
+            color: { dark: '#1a1a2e', light: '#ffffff' }
+        }, function(error, canvas) {
+            if (!error) {
+                qrContainer.appendChild(canvas);
+            }
+        });
+
+        document.getElementById('successOverlay').classList.add('show');
+
+        // Reset form
+        document.getElementById('regForm').reset();
+        document.getElementById('submitBtn').disabled = false;
+        document.getElementById('submitBtn').innerHTML = 'Get My Food Coupon';
+        selectedPlates = 1;
+        document.querySelectorAll('.plates-selector label').forEach((l, i) => {
+            l.classList.toggle('selected', i === 0);
+        });
+    }
+
+    // ============================================================
+    // Utility functions
+    // ============================================================
+    function screenshotHint() {
+        alert('📸 Take a screenshot now!\n\nOn iPhone: Press Side + Volume Up\nOn Android: Press Power + Volume Down\n\nYou can also find the coupon link in your WhatsApp/SMS.');
+    }
+
+    function newRegistration() {
+        document.getElementById('successOverlay').classList.remove('show');
+    }
+</script>
+
+</body>
+</html>

@@ -1,5 +1,4 @@
-
-    // ============================================================
+// ============================================================
 // FRONTEND CONFIGURATION - config.js
 // ============================================================
 // This is the ONLY file you need to update for the frontend.
@@ -24,10 +23,10 @@ const CONFIG = {
     // ──────────────────────────────────────────────────────────
     // Used to generate coupon page links in QR codes.
     // Examples:
-    //   GitHub Pages:  'https://arnabsaha-cse.github.io/BhogCouponApp'
+    //   GitHub Pages:  'https://yourusername.github.io/FoodCouponApp'
     //   Local testing: '' (empty string — uses relative paths)
     //
-    BASE_URL: '',
+    BASE_URL: 'https://arnabsaha-cse.github.io/BhogCouponApp',
 
     // ──────────────────────────────────────────────────────────
     // Event Dates
@@ -37,16 +36,27 @@ const CONFIG = {
     // and the date filter on the admin page.
     //
     EVENT_DATES: [
-        '2026-10-01',
-        '2026-10-02',
-        '2026-10-03',
-        '2026-10-04',
-        '2026-10-05'
+        '2026-10-16',
+        '2026-10-17',
+        '2026-10-18',
+        '2026-10-19',
+        '2026-10-20'
     ],
+
+    // ──────────────────────────────────────────────────────────
+    // Event Logo
+    // ──────────────────────────────────────────────────────────
+    // URL or relative path to your event logo image.
+    // Displayed at the top of the registration page.
+    // Recommended size: 80-120px height, PNG or JPG.
+    // Set to '' to show the 🪷 emoji fallback.
+    //
+    EVENT_LOGO_URL: 'agomoni_small_logo',
 
     // ──────────────────────────────────────────────────────────
     // Registration Settings
     // ──────────────────────────────────────────────────────────
+    // Max coupons (plates) per date per registration
     MAX_PLATES: 5,
 
     // ──────────────────────────────────────────────────────────
@@ -57,3 +67,4 @@ const CONFIG = {
     //
     ADMIN_PIN: '1234'
 };
+

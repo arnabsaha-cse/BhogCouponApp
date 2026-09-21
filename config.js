@@ -17,7 +17,7 @@ const CONFIG = {
     //   Apps Script Editor > Deploy > New deployment > Web app
     //   Copy the URL (looks like: https://script.google.com/macros/s/AKfycb.../exec)
     //
-    APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbz30kJPE9xltUByyu_rlRdA27xPB4Tcwc0twnyscaS64Tt9w9_yz3cK2KsE-hTPkp4loA/exec',
+    APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwa0gqREep3ZzsC2pyT98cdTw6Q7tDZuFI6L7JZn2h2cE_LOlFQwDs8ET08t23Gk8weTg/exec',
 
     // ──────────────────────────────────────────────────────────
     // Base URL where this app is hosted

@@ -51,7 +51,7 @@ const CONFIG = {
     // Recommended size: 80-120px height, PNG or JPG.
     // Set to '' to show the 🪷 emoji fallback.
     //
-    EVENT_LOGO_URL: 'agomoni_small_logo',
+    EVENT_LOGO_URL: 'agomoni_small_logo.png',
 
     // ──────────────────────────────────────────────────────────
     // Registration Settings

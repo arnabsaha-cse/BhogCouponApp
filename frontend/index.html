@@ -441,11 +441,11 @@
     </div>
 </div>
 
-<!-- QR Code library -->
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-
-<!-- Shared config -->
+<!-- Shared config (defines CONFIG.QRCODE_LIB_URL, used below) -->
 <script src="config.js"></script>
+
+<!-- QR Code library (path comes from config.js, so it's only set in one place) -->
+<script>document.write('<script src="' + CONFIG.QRCODE_LIB_URL + '"><\/script>');</script>
 
 <script>
     // ============================================================
@@ -752,14 +752,12 @@
         if (coupons.length > 0) {
             var couponUrl = baseUrl + '/coupon.html?code=' + coupons[0].couponCode;
 
-            QRCode.toCanvas(document.createElement('canvas'), couponUrl, {
+            new QRCode(qrContainer, {
+                text: couponUrl,
                 width: 200,
-                margin: 2,
-                color: { dark: '#1a1a2e', light: '#ffffff' }
-            }, function(error, canvas) {
-                if (!error) {
-                    qrContainer.appendChild(canvas);
-                }
+                height: 200,
+                colorDark: '#1a1a2e',
+                colorLight: '#ffffff'
             });
         }
 

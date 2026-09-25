@@ -29,6 +29,22 @@ const CONFIG = {
     BASE_URL: '',
 
     // ──────────────────────────────────────────────────────────
+    // QR Code Library
+    // ──────────────────────────────────────────────────────────
+    // Path to the qrcode.js library used by index.html, coupon.html
+    // and qrcode.html to render QR codes.
+    // Using cdnjs's mirror of the classic davidshimjs/qrcodejs
+    // library (API: `new QRCode(element, options)`), since it's a
+    // stable, permanently-hosted file — unlike the npm "qrcode"
+    // package, whose precompiled browser bundle is no longer
+    // published for recent versions.
+    // If you'd rather self-host: download the file below, put it
+    // in this same frontend/ folder as e.g. qrcode.min.js, and
+    // point this at 'qrcode.min.js' instead.
+    //
+    QRCODE_LIB_URL: 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
+
+    // ──────────────────────────────────────────────────────────
     // Event Dates
     // ──────────────────────────────────────────────────────────
     // Your 5 distribution dates in YYYY-MM-DD format.

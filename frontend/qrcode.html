@@ -194,7 +194,11 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<!-- Shared config (defines CONFIG.QRCODE_LIB_URL, used below) -->
+<script src="config.js"></script>
+
+<!-- QR Code library (path comes from config.js, so it's only set in one place) -->
+<script>document.write('<script src="' + CONFIG.QRCODE_LIB_URL + '"><\/script>');</script>
 
 <script>
     let qrCanvas = null;
@@ -214,20 +218,16 @@
         const container = document.getElementById('qrCanvas');
         container.innerHTML = '';
 
-        const canvas = document.createElement('canvas');
-        QRCode.toCanvas(canvas, url, {
+        new QRCode(container, {
+            text: url,
             width: 300,
-            margin: 3,
-            color: { dark: '#1a1a2e', light: '#ffffff' }
-        }, function(error) {
-            if (!error) {
-                container.appendChild(canvas);
-                qrCanvas = canvas;
-                document.getElementById('qrOutput').classList.add('show');
-            } else {
-                alert('Error generating QR code: ' + error.message);
-            }
+            height: 300,
+            colorDark: '#1a1a2e',
+            colorLight: '#ffffff'
         });
+
+        qrCanvas = container.querySelector('canvas');
+        document.getElementById('qrOutput').classList.add('show');
     }
 
     function downloadQR() {

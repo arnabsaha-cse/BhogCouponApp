@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agomoni Durga Puja - Bhog Distribution</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #e65100 0%, #ff8f00 50%, #c62828 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            padding: 28px;
+            max-width: 440px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header .icon { font-size: 44px; margin-bottom: 6px; }
+        .header .logo { max-height: 100px; margin-bottom: 8px; border-radius: 8px; }
+
+        .header h1 {
+            font-size: 20px;
+            color: #c62828;
+            margin-bottom: 2px;
+            line-height: 1.3;
+        }
+
+        .header .subtitle {
+            font-size: 15px;
+            color: #e65100;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .header p {
+            color: #888;
+            font-size: 13px;
+        }
+
+        .form-group {
+            margin-bottom: 14px;
+        }
+
+        .form-group > label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 6px;
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="tel"] {
+            width: 100%;
+            padding: 12px 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 15px;
+            transition: border-color 0.2s;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .form-group input:focus {
+            border-color: #e65100;
+        }
+
+        .form-group .error-text {
+            color: #e74c3c;
+            font-size: 12px;
+            margin-top: 4px;
+            display: none;
+        }
+
+        /* Date rows */
+        .dates-section > label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .date-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            transition: all 0.2s;
+        }
+
+        .date-row.checked {
+            border-color: #e65100;
+            background: #fff8e1;
+        }
+
+        .date-row.disabled {
+            opacity: 0.45;
+            pointer-events: none;
+            background: #f5f5f5;
+        }
+
+        .date-row .date-check {
+            width: 20px;
+            height: 20px;
+            accent-color: #e65100;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .date-row .date-label {
+            flex: 1;
+            font-size: 14px;
+            color: #333;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .date-row .date-label .day-name {
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .date-row .date-label .date-str {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .date-row .coupon-input-wrap {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+
+        .date-row .coupon-input-wrap span {
+            font-size: 12px;
+            color: #666;
+            white-space: nowrap;
+        }
+
+        .date-row .coupon-count {
+            width: 52px;
+            padding: 6px 8px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            text-align: center;
+            outline: none;
+            -moz-appearance: textfield;
+        }
+
+        .date-row .coupon-count::-webkit-outer-spin-button,
+        .date-row .coupon-count::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .date-row .coupon-count:focus {
+            border-color: #e65100;
+        }
+
+        .date-row .coupon-count:disabled {
+            background: #f0f0f0;
+            color: #aaa;
+        }
+
+        .date-row .closed-badge {
+            font-size: 11px;
+            color: #999;
+            font-weight: 600;
+            background: #eee;
+            padding: 3px 8px;
+            border-radius: 6px;
+            white-space: nowrap;
+        }
+
+        .dates-error {
+            color: #e74c3c;
+            font-size: 12px;
+            margin-top: 2px;
+            display: none;
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #e65100 0%, #c62828 100%);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+            margin-top: 10px;
+        }
+
+        .btn-submit:hover { opacity: 0.9; }
+        .btn-submit:active { transform: scale(0.98); }
+        .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid #fff;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .note {
+            text-align: center;
+            font-size: 11px;
+            color: #aaa;
+            margin-top: 14px;
+        }
+
+        /* Success overlay */
+        .success-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .success-overlay.show { display: flex; }
+
+        .success-card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 28px;
+            max-width: 420px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .success-card .checkmark { font-size: 48px; margin-bottom: 8px; }
+
+        .success-card h2 {
+            color: #27ae60;
+            font-size: 20px;
+            margin-bottom: 6px;
+        }
+
+        .success-card .summary-table {
+            width: 100%;
+            text-align: left;
+            background: #f9f9f9;
+            border-radius: 10px;
+            padding: 12px;
+            margin: 14px 0;
+            font-size: 13px;
+        }
+
+        .success-card .summary-table .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+        }
+
+        .success-card .summary-table .info-row .label { font-weight: 600; color: #333; }
+        .success-card .summary-table .info-row .value { color: #555; }
+
+        .coupon-list {
+            text-align: left;
+            margin: 14px 0;
+        }
+
+        .coupon-item {
+            background: #f0f4ff;
+            border: 2px dashed #667eea;
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .coupon-item .coupon-date {
+            font-size: 13px;
+            color: #555;
+        }
+
+        .coupon-item .coupon-date .plates {
+            font-size: 11px;
+            color: #888;
+        }
+
+        .coupon-item .coupon-code {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a1a2e;
+            letter-spacing: 2px;
+        }
+
+        .qr-container { margin: 14px auto; }
+        .qr-container canvas { border-radius: 8px; }
+
+        .success-card .msg-note {
+            font-size: 12px;
+            color: #666;
+            margin-top: 10px;
+            line-height: 1.5;
+        }
+
+        .success-card .msg-note strong { color: #333; }
+
+        .btn-screenshot {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #27ae60;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .btn-new {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #e65100;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            margin-top: 8px;
+            margin-left: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <div id="headerLogo" class="icon">🪷</div>
+        <h1>Agomoni Durga Puja 2026</h1>
+        <div class="subtitle">Bhog Distribution</div>
+        <p style="color:#333; font-weight:600; font-size:14px; margin-bottom:2px;">Open for All</p>
+        <p>Register to receive your bhog coupons</p>
+    </div>
+
+    <form id="regForm" novalidate>
+        <div class="form-group">
+            <label for="name">Full Name *</label>
+            <input type="text" id="name" placeholder="Enter your full name" required autocomplete="name">
+            <div class="error-text" id="nameError">Please enter your name</div>
+        </div>
+
+        <div class="form-group">
+            <label for="phone">Phone Number *</label>
+            <input type="tel" id="phone" placeholder="Enter phone number" required autocomplete="tel">
+            <div class="error-text" id="phoneError">Please enter a valid phone number</div>
+        </div>
+
+        <div class="form-group dates-section">
+            <label>Select Dates &amp; Number of Coupons *</label>
+            <div id="dateRows">
+                <!-- Populated by JS -->
+            </div>
+            <div class="dates-error" id="datesError">Please select at least one date and enter coupon count</div>
+        </div>
+
+        <button type="submit" class="btn-submit" id="submitBtn">
+            Register for Bhog
+        </button>
+    </form>
+
+    <p class="note">Your information is used only for bhog distribution. We do not share your data.</p>
+</div>
+
+<!-- Success Overlay -->
+<div class="success-overlay" id="successOverlay">
+    <div class="success-card">
+        <div class="checkmark">✅</div>
+        <h2>Registration Successful!</h2>
+        <p>Show these coupons to the organizer</p>
+
+        <div class="summary-table">
+            <div class="info-row">
+                <span class="label">Name:</span>
+                <span class="value" id="successName"></span>
+            </div>
+            <div class="info-row">
+                <span class="label">Phone:</span>
+                <span class="value" id="successPhone"></span>
+            </div>
+        </div>
+
+        <div class="coupon-list" id="couponList">
+            <!-- Populated by JS -->
+        </div>
+
+        <div class="qr-container" id="qrContainer"></div>
+
+        <p class="msg-note">
+            <strong>📱 A WhatsApp / SMS</strong> with your coupons has been sent to your phone.
+            You can also screenshot this page.
+        </p>
+
+        <div>
+            <button class="btn-screenshot" onclick="screenshotHint()">📸 Screenshot This</button>
+            <button class="btn-new" onclick="newRegistration()">+ New Registration</button>
+        </div>
+    </div>
+</div>
+
+<!-- QR Code library -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/lib/browser.min.js"></script>
+
+<!-- Shared config -->
+<script src="config.js"></script>
+
+<script>
+    // ============================================================
+    // Logo from config (replaces emoji if set)
+    // ============================================================
+    (function() {
+        if (CONFIG.EVENT_LOGO_URL) {
+            var el = document.getElementById('headerLogo');
+            var img = document.createElement('img');
+            img.src = CONFIG.EVENT_LOGO_URL;
+            img.alt = 'Event Logo';
+            img.className = 'logo';
+            el.innerHTML = '';
+            el.className = '';
+            el.appendChild(img);
+        }
+    })();
+
+    // ============================================================
+    // JSONP helper
+    // ============================================================
+    var _jsonpId = 0;
+    function jsonpCall(params, onSuccess, onError) {
+        var cbName = 'cb_' + (++_jsonpId) + '_' + Date.now();
+        params.callback = cbName;
+
+        var url = CONFIG.APPS_SCRIPT_URL + '?' + new URLSearchParams(params).toString();
+        var script = document.createElement('script');
+        script.src = url;
+
+        var timeout = setTimeout(function() {
+            cleanup();
+            if (onError) onError(new Error('Request timed out'));
+        }, 15000);
+
+        function cleanup() {
+            clearTimeout(timeout);
+            if (script.parentNode) script.parentNode.removeChild(script);
+            delete window[cbName];
+        }
+
+        window[cbName] = function(result) {
+            cleanup();
+            if (onSuccess) onSuccess(result);
+        };
+
+        script.onerror = function() {
+            cleanup();
+            if (onError) onError(new Error('Network error'));
+        };
+
+        document.body.appendChild(script);
+    }
+
+    // ============================================================
+    // Build date rows (fetches disabled dates from backend)
+    // ============================================================
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Fetch date settings from backend, then build rows
+    // If fetch fails, fall back to config.js DISABLED_DATES
+    fetchAndBuildDates();
+
+    function fetchAndBuildDates() {
+        jsonpCall(
+            { action: 'getDateSettings' },
+            function(result) {
+                var dateInfo = {};
+                if (result.status === 'success' && result.dates) {
+                    result.dates.forEach(function(d) {
+                        dateInfo[d.date] = {
+                            enabled: d.enabled,
+                            isFull: d.isFull || false,
+                            issuedCount: d.issuedCount || 0,
+                            maxTokens: d.maxTokens || 0
+                        };
+                    });
+                }
+                buildDateRows(dateInfo);
+            },
+            function() {
+                // Fallback: if backend is unreachable, show all future dates as open
+                buildDateRows({});
+            }
+        );
+    }
+
+    function buildDateRows(dateInfo) {
+        var dateRowsContainer = document.getElementById('dateRows');
+        dateRowsContainer.innerHTML = '';
+
+        CONFIG.EVENT_DATES.forEach(function(dateStr, index) {
+            var d = new Date(dateStr + 'T00:00:00');
+            var isPast = d < today;
+            var info = dateInfo[dateStr] || { enabled: true, isFull: false };
+            var isAdminDisabled = !info.enabled;
+            var isFull = info.isFull;
+            var isDisabled = isPast || isAdminDisabled || isFull;
+
+            var dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
+            var dateFormatted = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+            var row = document.createElement('div');
+            row.className = 'date-row' + (isDisabled ? ' disabled' : '');
+            row.id = 'dateRow_' + index;
+
+            var statusHtml = '';
+            if (isPast) {
+                statusHtml = '<span class="closed-badge">Closed</span>';
+            } else if (isFull) {
+                statusHtml = '<span class="closed-badge" style="background:#ffe0e0;color:#c62828;">Full</span>';
+            } else if (isAdminDisabled) {
+                statusHtml = '<span class="closed-badge">Closed</span>';
+            } else {
+                statusHtml =
+                    '<div class="coupon-input-wrap">' +
+                        '<span>Coupons:</span>' +
+                        '<input type="number" class="coupon-count" id="count_' + index + '" ' +
+                            'min="0" max="' + CONFIG.MAX_PLATES + '" value="" placeholder="0" ' +
+                            'inputmode="numeric" pattern="[0-9]*" disabled>' +
+                    '</div>';
+            }
+
+            row.innerHTML =
+                '<input type="checkbox" class="date-check" id="check_' + index + '" ' +
+                    'data-date="' + dateStr + '" ' +
+                    (isDisabled ? 'disabled' : '') + '>' +
+                '<label class="date-label" for="check_' + index + '">' +
+                    '<span class="day-name">Day ' + (index + 1) + ' — ' + dayName + '</span><br>' +
+                    '<span class="date-str">' + dateFormatted + '</span>' +
+                '</label>' +
+                statusHtml;
+
+            dateRowsContainer.appendChild(row);
+
+            // Toggle row highlight and enable/disable count input
+            if (!isDisabled) {
+                var checkbox = row.querySelector('.date-check');
+                var countInput = row.querySelector('.coupon-count');
+
+                checkbox.addEventListener('change', function() {
+                    if (this.checked) {
+                        row.classList.add('checked');
+                        countInput.disabled = false;
+                        countInput.focus();
+                        if (!countInput.value || countInput.value === '0') countInput.value = '1';
+                    } else {
+                        row.classList.remove('checked');
+                        countInput.disabled = true;
+                        countInput.value = '';
+                    }
+                });
+
+                // Enforce integer only and max limit
+                countInput.addEventListener('input', function() {
+                    var val = this.value.replace(/[^0-9]/g, '');
+                    var num = parseInt(val) || 0;
+                    if (num > CONFIG.MAX_PLATES) num = CONFIG.MAX_PLATES;
+                    if (num < 0) num = 0;
+                    this.value = num || '';
+                });
+            }
+        });
+    }
+
+    // ============================================================
+    // Form validation
+    // ============================================================
+    function validateForm() {
+        var valid = true;
+        var name = document.getElementById('name').value.trim();
+        var phone = document.getElementById('phone').value.trim();
+
+        // Name
+        if (!name || name.length < 2) {
+            document.getElementById('nameError').style.display = 'block';
+            valid = false;
+        } else {
+            document.getElementById('nameError').style.display = 'none';
+        }
+
+        // Phone (at least 7 digits)
+        var phoneClean = phone.replace(/[^0-9+]/g, '');
+        if (!phoneClean || phoneClean.replace(/\+/g, '').length < 7) {
+            document.getElementById('phoneError').style.display = 'block';
+            valid = false;
+        } else {
+            document.getElementById('phoneError').style.display = 'none';
+        }
+
+        // At least one date selected with count > 0
+        var selections = getSelectedDates();
+        if (selections.length === 0) {
+            document.getElementById('datesError').style.display = 'block';
+            valid = false;
+        } else {
+            document.getElementById('datesError').style.display = 'none';
+        }
+
+        return valid;
+    }
+
+    function getSelectedDates() {
+        var selections = [];
+        CONFIG.EVENT_DATES.forEach(function(dateStr, index) {
+            var checkbox = document.getElementById('check_' + index);
+            var countInput = document.getElementById('count_' + index);
+            if (checkbox && checkbox.checked && countInput) {
+                var count = parseInt(countInput.value) || 0;
+                if (count > 0) {
+                    selections.push({ date: dateStr, coupons: count });
+                }
+            }
+        });
+        return selections;
+    }
+
+    // ============================================================
+    // Form submission (uses shared jsonpCall helper)
+    // ============================================================
+    document.getElementById('regForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        if (!validateForm()) return;
+
+        var btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Submitting...';
+
+        var name = document.getElementById('name').value.trim();
+        var phone = document.getElementById('phone').value.trim();
+        var selections = getSelectedDates();
+
+        jsonpCall(
+            {
+                action: 'register',
+                name: name,
+                phone: phone,
+                dates: JSON.stringify(selections)
+            },
+            function(result) {
+                if (result.status === 'success' || result.status === 'updated') {
+                    showSuccess(result);
+                } else if (result.status === 'partial') {
+                    showSuccess(result);
+                    var msgs = [];
+                    if (result.updated && result.updated.length > 0) {
+                        msgs.push('Updated coupon count for: ' + result.updated.map(function(d) { return d.date; }).join(', '));
+                    }
+                    if (result.full && result.full.length > 0) {
+                        msgs.push('These dates are full: ' + result.full.map(function(d) { return d.date; }).join(', '));
+                    }
+                    if (msgs.length > 0) alert(msgs.join('\n\n'));
+                } else {
+                    alert('Registration failed: ' + (result.message || 'Unknown error'));
+                    btn.disabled = false;
+                    btn.innerHTML = 'Register for Bhog';
+                }
+            },
+            function() {
+                alert('Something went wrong. Please try again.');
+                btn.disabled = false;
+                btn.innerHTML = 'Register for Bhog';
+            }
+        );
+    });
+
+    // ============================================================
+    // Show success screen (multi-date)
+    // ============================================================
+    function showSuccess(result) {
+        document.getElementById('successName').textContent = result.name;
+        document.getElementById('successPhone').textContent = result.phone;
+
+        // Build coupon list
+        var couponListEl = document.getElementById('couponList');
+        couponListEl.innerHTML = '';
+
+        var coupons = result.coupons || [];
+        var baseUrl = CONFIG.BASE_URL || (window.location.origin + window.location.pathname.replace(/\/[^/]*$/, ''));
+
+        coupons.forEach(function(c, idx) {
+            var d = new Date(c.date + 'T00:00:00');
+            var dateStr = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            var isUpdated = c.status === 'updated';
+
+            var item = document.createElement('div');
+            item.className = 'coupon-item';
+            item.innerHTML =
+                '<div class="coupon-date">' + dateStr +
+                    '<div class="plates">' + c.coupons + ' coupon(s)' +
+                    (isUpdated ? ' <span style="color:#e65100;font-size:11px;">(updated)</span>' : '') +
+                    '</div>' +
+                '</div>' +
+                '<div class="coupon-code">' + c.couponCode + '</div>';
+            couponListEl.appendChild(item);
+        });
+
+        // Generate QR code for the first coupon (user can open link for others from WhatsApp)
+        var qrContainer = document.getElementById('qrContainer');
+        qrContainer.innerHTML = '';
+
+        if (coupons.length > 0) {
+            var couponUrl = baseUrl + '/coupon.html?code=' + coupons[0].couponCode;
+
+            QRCode.toCanvas(document.createElement('canvas'), couponUrl, {
+                width: 200,
+                margin: 2,
+                color: { dark: '#1a1a2e', light: '#ffffff' }
+            }, function(error, canvas) {
+                if (!error) {
+                    qrContainer.appendChild(canvas);
+                }
+            });
+        }
+
+        document.getElementById('successOverlay').classList.add('show');
+
+        // Reset form
+        document.getElementById('regForm').reset();
+        document.getElementById('submitBtn').disabled = false;
+        document.getElementById('submitBtn').innerHTML = 'Register for Bhog';
+
+        // Reset date rows
+        document.querySelectorAll('.date-row').forEach(function(row) {
+            row.classList.remove('checked');
+        });
+        document.querySelectorAll('.coupon-count').forEach(function(input) {
+            input.disabled = true;
+            input.value = '';
+        });
+    }
+
+    // ============================================================
+    // Utility
+    // ============================================================
+    function screenshotHint() {
+        alert('📸 Take a screenshot now!\n\nOn iPhone: Press Side + Volume Up\nOn Android: Press Power + Volume Down\n\nYou can also find the coupons in your WhatsApp/SMS.');
+    }
+
+    function newRegistration() {
+        document.getElementById('successOverlay').classList.remove('show');
+    }
+</script>
+
+</body>
+</html>

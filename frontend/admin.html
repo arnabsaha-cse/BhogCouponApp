@@ -1,0 +1,1932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bhog Distribution - Admin</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f6fa;
+            min-height: 100vh;
+        }
+
+        /* Login screen */
+        .login-screen {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+        }
+
+        .login-card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 360px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+
+        .login-card h1 { font-size: 20px; margin-bottom: 8px; color: #1a1a2e; }
+        .login-card p { font-size: 14px; color: #666; margin-bottom: 20px; }
+
+        .login-card input {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 24px;
+            text-align: center;
+            letter-spacing: 8px;
+            outline: none;
+            margin-bottom: 16px;
+        }
+
+        .login-card input:focus { border-color: #3498db; }
+
+        .login-card button {
+            width: 100%;
+            padding: 14px;
+            background: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .login-error {
+            color: #e74c3c;
+            font-size: 13px;
+            margin-top: 8px;
+            display: none;
+        }
+
+        /* Admin panel */
+        .admin-panel { display: none; }
+
+        .admin-header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: #fff;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .admin-header h1 { font-size: 18px; }
+
+        .btn-logout {
+            background: rgba(255,255,255,0.2);
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        /* Stats bar */
+        .stats-bar {
+            display: flex;
+            gap: 12px;
+            padding: 16px 20px;
+            overflow-x: auto;
+        }
+
+        .stat-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 14px 18px;
+            min-width: 120px;
+            flex: 1;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            text-align: center;
+        }
+
+        .stat-card .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+
+        .stat-card .stat-label {
+            font-size: 12px;
+            color: #999;
+            margin-top: 2px;
+        }
+
+        .stat-card.green .stat-value { color: #27ae60; }
+        .stat-card.blue .stat-value { color: #3498db; }
+        .stat-card.orange .stat-value { color: #f39c12; }
+
+        /* Tab navigation */
+        .tabs {
+            display: flex;
+            padding: 0 20px;
+            gap: 0;
+            border-bottom: 2px solid #e0e0e0;
+            background: #fff;
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            padding: 12px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            background: none;
+            cursor: pointer;
+            color: #999;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .tab-btn.active {
+            color: #3498db;
+            border-bottom-color: #3498db;
+        }
+
+        /* Tab content */
+        .tab-content { display: none; padding: 20px; }
+        .tab-content.active { display: block; }
+
+        /* Scanner tab */
+        .scanner-area {
+            max-width: 400px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        #qr-reader {
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .btn-scan {
+            width: 100%;
+            padding: 14px;
+            background: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 12px;
+        }
+
+        .btn-scan.scanning {
+            background: #e74c3c;
+        }
+
+        .scan-result {
+            display: none;
+            background: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            margin-top: 16px;
+        }
+
+        .scan-result.show { display: block; }
+
+        .scan-result .result-header {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .scan-result .result-details {
+            text-align: left;
+            line-height: 1.8;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .scan-result .result-details span { font-weight: 600; }
+
+        .btn-redeem {
+            width: 100%;
+            padding: 14px;
+            background: #27ae60;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-redeem:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .result-valid { border-left: 4px solid #27ae60; }
+        .result-redeemed { border-left: 4px solid #e74c3c; }
+        .result-notfound { border-left: 4px solid #f39c12; }
+
+        /* Search tab */
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 12px 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 15px;
+            outline: none;
+        }
+
+        .search-box input:focus { border-color: #3498db; }
+
+        .search-box button {
+            padding: 12px 20px;
+            background: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .search-result-item {
+            background: #fff;
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .search-result-item .info { flex: 1; min-width: 140px; }
+        .search-result-item .info .name { font-weight: 600; font-size: 15px; }
+        .search-result-item .info .meta { font-size: 13px; color: #666; margin-top: 2px; }
+        .search-result-item .code {
+            font-weight: 700;
+            font-size: 14px;
+            color: #667eea;
+            margin-left: 12px;
+        }
+
+        .search-result-item .actions { margin-left: 12px; }
+
+        .btn-small-redeem {
+            padding: 8px 16px;
+            background: #27ae60;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-small-redeem.redeemed {
+            background: #ccc;
+            cursor: default;
+        }
+
+        .no-results {
+            text-align: center;
+            color: #999;
+            padding: 40px;
+            font-size: 14px;
+        }
+
+        /* Date filter */
+        .filter-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+            align-items: center;
+        }
+
+        .filter-bar select {
+            padding: 10px 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 14px;
+            outline: none;
+            flex: 1;
+        }
+
+        .filter-bar .btn-refresh {
+            padding: 10px 16px;
+            background: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        /* Manual entry */
+        .manual-entry {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .manual-entry input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 15px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            outline: none;
+        }
+
+        .manual-entry button {
+            padding: 12px 20px;
+            background: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* Date toggle rows */
+        .date-toggle-row {
+            background: #fff;
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .date-toggle-row .date-info {
+            flex: 1;
+            min-width: 160px;
+        }
+
+        .date-toggle-row .date-info .date-day {
+            font-weight: 600;
+            font-size: 15px;
+            color: #333;
+        }
+
+        .date-toggle-row .date-info .date-full {
+            font-size: 12px;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        .date-toggle-row .date-info .date-past {
+            font-size: 11px;
+            color: #999;
+            font-style: italic;
+        }
+
+        .date-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .token-limit-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+        }
+
+        .token-limit-group label {
+            color: #666;
+            white-space: nowrap;
+        }
+
+        .token-limit-group input {
+            width: 70px;
+            padding: 6px 8px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 13px;
+            text-align: center;
+            outline: none;
+        }
+
+        .token-limit-group input:focus {
+            border-color: #3498db;
+        }
+
+        .issued-count {
+            font-size: 13px;
+            color: #555;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .badge-full {
+            background: #e74c3c;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 10px;
+            text-transform: uppercase;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 28px;
+            flex-shrink: 0;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #ccc;
+            border-radius: 28px;
+            transition: 0.3s;
+        }
+
+        .toggle-slider:before {
+            content: "";
+            position: absolute;
+            height: 22px;
+            width: 22px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: #27ae60;
+        }
+
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(22px);
+        }
+
+        .toggle-switch input:disabled + .toggle-slider {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .toggle-status {
+            font-size: 12px;
+            font-weight: 600;
+            min-width: 55px;
+            text-align: right;
+        }
+
+        .toggle-status.open { color: #27ae60; }
+        .toggle-status.closed { color: #e74c3c; }
+        .toggle-status.past { color: #999; }
+
+        /* ============================
+           Walk-in Tab
+           ============================ */
+        .walkin-area {
+            max-width: 480px;
+            margin: 0 auto;
+        }
+
+        .walkin-area h2 {
+            font-size: 20px;
+            color: #2c3e50;
+            margin-bottom: 4px;
+        }
+
+        .walkin-area .walkin-subtitle {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 20px;
+        }
+
+        .walkin-date-label {
+            background: #eaf4fe;
+            color: #2c3e50;
+            border-radius: 10px;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: inline-block;
+        }
+
+        .walkin-form .form-group {
+            margin-bottom: 16px;
+        }
+
+        .walkin-form .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 6px;
+        }
+
+        .walkin-form .form-group input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .walkin-form .form-group input:focus {
+            border-color: #3498db;
+        }
+
+        .btn-walkin-submit {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 8px;
+            transition: opacity 0.2s;
+        }
+
+        .btn-walkin-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-walkin-submit:hover:not(:disabled) {
+            opacity: 0.92;
+        }
+
+        .walkin-success {
+            display: none;
+            background: #d4edda;
+            border: 2px solid #27ae60;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin-top: 16px;
+            animation: fadeInUp 0.3s ease;
+        }
+
+        .walkin-success.show {
+            display: block;
+        }
+
+        .walkin-success .success-icon {
+            font-size: 36px;
+            margin-bottom: 8px;
+        }
+
+        .walkin-success .success-code {
+            font-size: 24px;
+            font-weight: 700;
+            color: #155724;
+            letter-spacing: 2px;
+            margin-bottom: 4px;
+        }
+
+        .walkin-success .success-msg {
+            font-size: 14px;
+            color: #155724;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ============================
+           Summary Tab
+           ============================ */
+        .summary-section {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .summary-section h2 {
+            font-size: 20px;
+            color: #2c3e50;
+            margin-bottom: 16px;
+        }
+
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+
+        .summary-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border-top: 4px solid #ccc;
+        }
+
+        .summary-card .sc-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .summary-card .sc-label {
+            font-size: 12px;
+            color: #777;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .summary-card.sc-blue   { border-top-color: #3498db; }
+        .summary-card.sc-blue   .sc-value { color: #3498db; }
+        .summary-card.sc-purple { border-top-color: #8e44ad; }
+        .summary-card.sc-purple .sc-value { color: #8e44ad; }
+        .summary-card.sc-teal   { border-top-color: #16a085; }
+        .summary-card.sc-teal   .sc-value { color: #16a085; }
+        .summary-card.sc-green  { border-top-color: #27ae60; }
+        .summary-card.sc-green  .sc-value { color: #27ae60; }
+        .summary-card.sc-orange { border-top-color: #f39c12; }
+        .summary-card.sc-orange .sc-value { color: #f39c12; }
+        .summary-card.sc-red    { border-top-color: #e74c3c; }
+        .summary-card.sc-red    .sc-value { color: #e74c3c; }
+
+        .summary-table-wrap {
+            overflow-x: auto;
+            margin-bottom: 20px;
+        }
+
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            background: #fff;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .summary-table th {
+            background: #2c3e50;
+            color: #fff;
+            padding: 12px 14px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        .summary-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid #f0f0f0;
+            white-space: nowrap;
+        }
+
+        .summary-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .summary-table tr.totals-row {
+            background: #f8f9fa;
+            font-weight: 700;
+        }
+
+        .summary-table tr.totals-row td {
+            border-top: 2px solid #2c3e50;
+        }
+
+        .btn-print {
+            padding: 12px 24px;
+            background: #2c3e50;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-print:hover { opacity: 0.9; }
+
+        .summary-loading {
+            text-align: center;
+            color: #999;
+            padding: 40px;
+            font-size: 14px;
+        }
+
+        /* ============================
+           Print styles
+           ============================ */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            .summary-section, .summary-section * {
+                visibility: visible;
+            }
+            .summary-section {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+            .btn-print {
+                display: none !important;
+            }
+            .admin-header, .stats-bar, .filter-bar, .tabs,
+            .login-screen, .btn-logout {
+                display: none !important;
+            }
+        }
+
+        /* ============================
+           Responsive
+           ============================ */
+        @media (max-width: 600px) {
+            .tabs { padding: 0 8px; }
+            .tab-btn { padding: 10px 10px; font-size: 12px; }
+            .summary-cards { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        /* Members tab */
+        .members-header {
+            background: #fff;
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 14px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        }
+
+        .members-header .members-count {
+            font-size: 18px;
+            font-weight: 700;
+            color: #e65100;
+            margin-bottom: 4px;
+        }
+
+        .members-header .members-subtitle {
+            font-size: 13px;
+            color: #888;
+        }
+
+        .member-row {
+            background: #fff;
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin-bottom: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .member-row .member-info {
+            flex: 1;
+        }
+
+        .member-row .member-info .member-name {
+            font-weight: 600;
+            font-size: 15px;
+            color: #333;
+        }
+
+        .member-row .member-info .member-meta {
+            font-size: 13px;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        .member-row .member-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .member-row .coupon-badge {
+            font-size: 13px;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .btn-call {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 8px 14px;
+            background: #27ae60;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .btn-call:hover { opacity: 0.9; }
+    </style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div class="login-screen" id="loginScreen">
+    <div class="login-card">
+        <h1>🔐 Admin Access</h1>
+        <p>Enter the 4-digit PIN to continue</p>
+        <input type="password" id="pinInput" maxlength="4" placeholder="• • • •" inputmode="numeric"
+               onkeypress="if(event.key==='Enter') loginAdmin()">
+        <button onclick="loginAdmin()">Enter</button>
+        <p class="login-error" id="loginError">Incorrect PIN. Try again.</p>
+    </div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div class="admin-panel" id="adminPanel">
+    <!-- Header -->
+    <div class="admin-header">
+        <h1>🍽️ Bhog Distribution Admin</h1>
+        <button class="btn-logout" onclick="logoutAdmin()">Logout</button>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-bar">
+        <div class="stat-card blue">
+            <div class="stat-value" id="statTotal">0</div>
+            <div class="stat-label">Registered</div>
+        </div>
+        <div class="stat-card green">
+            <div class="stat-value" id="statRedeemed">0</div>
+            <div class="stat-label">Redeemed</div>
+        </div>
+        <div class="stat-card orange">
+            <div class="stat-value" id="statPending">0</div>
+            <div class="stat-label">Pending</div>
+        </div>
+    </div>
+
+    <!-- Date filter -->
+    <div class="filter-bar" style="padding: 0 20px;">
+        <select id="dateFilter" onchange="refreshData()">
+            <option value="all">All Dates</option>
+        </select>
+        <button class="btn-refresh" onclick="refreshData()">🔄 Refresh</button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="scanner" onclick="switchTab('scanner', this)">📷 Scanner</button>
+        <button class="tab-btn" data-tab="search" onclick="switchTab('search', this)">🔍 Search</button>
+        <button class="tab-btn" data-tab="walkin" onclick="switchTab('walkin', this)">➕ Walk-in</button>
+        <button class="tab-btn" data-tab="list" onclick="switchTab('list', this)">📋 All Entries</button>
+        <button class="tab-btn" data-tab="dates" onclick="switchTab('dates', this)">📅 Dates</button>
+        <button class="tab-btn" data-tab="summary" onclick="switchTab('summary', this)">📊 Summary</button>
+        <button class="tab-btn" data-tab="members" onclick="switchTab('members', this)">👥 Members</button>
+    </div>
+
+    <!-- SCANNER TAB -->
+    <div class="tab-content active" id="tab-scanner">
+        <div class="scanner-area">
+            <div id="qr-reader"></div>
+            <button class="btn-scan" id="scanBtn" onclick="toggleScanner()">📷 Start Scanner</button>
+
+            <p style="color:#999; font-size:13px; margin: 8px 0 16px;">— or enter code manually —</p>
+
+            <div class="manual-entry">
+                <input type="text" id="manualCode" placeholder="BHOG-XXXX" maxlength="9"
+                       onkeypress="if(event.key==='Enter') lookupManual()">
+                <button onclick="lookupManual()">Verify</button>
+            </div>
+
+            <!-- Scan result -->
+            <div class="scan-result" id="scanResult">
+                <div class="result-header" id="resultHeader"></div>
+                <div class="result-details" id="resultDetails"></div>
+                <button class="btn-redeem" id="redeemBtn" onclick="redeemCoupon()">
+                    ✅ Mark as Redeemed
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SEARCH TAB -->
+    <div class="tab-content" id="tab-search">
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Search by name, phone, or code..."
+                   onkeypress="if(event.key==='Enter') searchEntries()">
+            <button onclick="searchEntries()">Search</button>
+        </div>
+        <div id="searchResults">
+            <div class="no-results">Search by name, phone number, or coupon code</div>
+        </div>
+    </div>
+
+    <!-- WALK-IN TAB -->
+    <div class="tab-content" id="tab-walkin">
+        <div class="walkin-area">
+            <h2>➕ Walk-in Registration</h2>
+            <p class="walkin-subtitle">Quick register &amp; redeem for people in the queue</p>
+
+            <div class="walkin-date-label" id="walkinDateLabel">📅 Loading...</div>
+
+            <form class="walkin-form" id="walkinForm" onsubmit="submitWalkin(event)">
+                <div class="form-group">
+                    <label for="walkinName">Name</label>
+                    <input type="text" id="walkinName" placeholder="Enter full name" required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="walkinPhone">Phone Number</label>
+                    <input type="tel" id="walkinPhone" placeholder="10-digit phone number"
+                           required pattern="[0-9]{10}" maxlength="10" inputmode="numeric" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="walkinPlates">Number of Coupons (max <span id="walkinMaxPlates">5</span>)</label>
+                    <input type="number" id="walkinPlates" min="1" max="5" value="1"
+                           required inputmode="numeric" autocomplete="off">
+                </div>
+                <button type="submit" class="btn-walkin-submit" id="walkinSubmitBtn">
+                    Register &amp; Redeem
+                </button>
+            </form>
+
+            <div class="walkin-success" id="walkinSuccess">
+                <div class="success-icon">✅</div>
+                <div class="success-code" id="walkinSuccessCode">BHOG-XXXX</div>
+                <div class="success-msg" id="walkinSuccessMsg">Registered &amp; Redeemed successfully</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ALL ENTRIES TAB -->
+    <div class="tab-content" id="tab-list">
+        <div id="allEntries">
+            <div class="no-results">Loading entries...</div>
+        </div>
+    </div>
+
+    <!-- DATES MANAGEMENT TAB -->
+    <div class="tab-content" id="tab-dates">
+        <p style="font-size:14px; color:#555; margin-bottom:14px;">
+            Toggle dates to enable or disable registration. Set max token limits per date. Past dates are auto-disabled.
+        </p>
+        <div id="dateToggles">
+            <div class="no-results">Loading date settings...</div>
+        </div>
+    </div>
+
+    <!-- SUMMARY TAB -->
+    <div class="tab-content" id="tab-summary">
+        <div class="summary-section" id="summarySection">
+            <h2>📊 Dashboard Summary</h2>
+
+            <div id="summaryContent">
+                <div class="summary-loading">Loading summary data...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MEMBERS TAB -->
+    <div class="tab-content" id="tab-members">
+        <div class="members-header" id="membersHeader">
+            <p style="color:#666; font-size:14px;">Loading member data...</p>
+        </div>
+        <div style="text-align:center; margin-bottom:12px;">
+            <button onclick="loadMembersStatus()" style="padding:8px 18px; background:#667eea; color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer;">🔄 Refresh</button>
+        </div>
+        <div class="members-list" id="membersList"></div>
+    </div>
+</div>
+
+<!-- QR Scanner Library -->
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<!-- Shared config -->
+<script src="config.js"></script>
+
+<script>
+    // ============================================================
+    // JSONP helper (avoids CORS issues with Google Apps Script)
+    // ============================================================
+    var jsonpCounter = 0;
+
+    function jsonpRequest(params, onSuccess, onError) {
+        var callbackName = 'jsonpCb_' + (++jsonpCounter) + '_' + Date.now();
+        params.callback = callbackName;
+
+        var url = CONFIG.APPS_SCRIPT_URL + '?' + new URLSearchParams(params).toString();
+        var script = document.createElement('script');
+        script.src = url;
+
+        var timeout = setTimeout(function() {
+            cleanup();
+            if (onError) onError(new Error('Request timed out'));
+        }, 15000);
+
+        function cleanup() {
+            clearTimeout(timeout);
+            if (script.parentNode) script.parentNode.removeChild(script);
+            delete window[callbackName];
+        }
+
+        window[callbackName] = function(result) {
+            cleanup();
+            if (onSuccess) onSuccess(result);
+        };
+
+        script.onerror = function() {
+            cleanup();
+            if (onError) onError(new Error('Network error'));
+        };
+
+        document.body.appendChild(script);
+    }
+
+    // ============================================================
+    // Data cache & state
+    // ============================================================
+    var allData = [];
+    var currentScanCode = null;
+    var html5QrCode = null;
+    var isScanning = false;
+
+    // ============================================================
+    // Login / Logout
+    // ============================================================
+    function loginAdmin() {
+        var pin = document.getElementById('pinInput').value;
+        if (pin === CONFIG.ADMIN_PIN) {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('adminPanel').style.display = 'block';
+            populateDateFilter();
+            initWalkinTab();
+            refreshData();
+        } else {
+            document.getElementById('loginError').style.display = 'block';
+            document.getElementById('pinInput').value = '';
+            document.getElementById('pinInput').focus();
+        }
+    }
+
+    function logoutAdmin() {
+        if (isScanning) toggleScanner();
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.getElementById('adminPanel').style.display = 'none';
+        document.getElementById('pinInput').value = '';
+    }
+
+    // ============================================================
+    // Date filter
+    // ============================================================
+    function populateDateFilter() {
+        var select = document.getElementById('dateFilter');
+        CONFIG.EVENT_DATES.forEach(function(dateStr) {
+            var d = new Date(dateStr + 'T00:00:00');
+            var option = document.createElement('option');
+            option.value = dateStr;
+            option.textContent = d.toLocaleDateString('en-US', {
+                weekday: 'short', month: 'short', day: 'numeric'
+            });
+            select.appendChild(option);
+        });
+
+        // Default to today if today is an event date
+        var todayStr = getTodayStr();
+        if (CONFIG.EVENT_DATES.indexOf(todayStr) !== -1) {
+            select.value = todayStr;
+        }
+    }
+
+    function getTodayStr() {
+        var now = new Date();
+        var y = now.getFullYear();
+        var m = String(now.getMonth() + 1).padStart(2, '0');
+        var d = String(now.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + d;
+    }
+
+    function getTodayFormatted() {
+        var now = new Date();
+        return now.toLocaleDateString('en-US', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        });
+    }
+
+    // ============================================================
+    // Tab switching
+    // ============================================================
+    function switchTab(tabName, btnEl) {
+        document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+        document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.remove('active'); });
+
+        if (btnEl) {
+            btnEl.classList.add('active');
+        } else {
+            // Fallback: find button by data-tab
+            var btn = document.querySelector('.tab-btn[data-tab="' + tabName + '"]');
+            if (btn) btn.classList.add('active');
+        }
+        document.getElementById('tab-' + tabName).classList.add('active');
+
+        // Tab-specific actions
+        if (tabName === 'dates') {
+            loadDateSettings();
+        }
+        if (tabName === 'summary') {
+            loadSummary();
+        }
+        if (tabName === 'members') {
+            loadMembersStatus();
+        }
+        if (tabName === 'walkin') {
+            document.getElementById('walkinName').focus();
+        }
+
+        // Stop scanner when switching away
+        if (tabName !== 'scanner' && isScanning) {
+            toggleScanner();
+        }
+    }
+
+    // ============================================================
+    // Data fetching
+    // ============================================================
+    function refreshData() {
+        var dateFilter = document.getElementById('dateFilter').value;
+
+        jsonpRequest(
+            { action: 'list', date: dateFilter },
+            function(result) {
+                if (result.status === 'success') {
+                    allData = result.data || [];
+                    updateStats();
+                    renderAllEntries();
+                }
+            },
+            function(err) {
+                console.error('Refresh error:', err);
+            }
+        );
+    }
+
+    function updateStats() {
+        var total = allData.length;
+        var redeemed = allData.filter(function(d) { return d.redeemed; }).length;
+        var pending = total - redeemed;
+
+        document.getElementById('statTotal').textContent = total;
+        document.getElementById('statRedeemed').textContent = redeemed;
+        document.getElementById('statPending').textContent = pending;
+    }
+
+    // ============================================================
+    // QR Scanner
+    // ============================================================
+    function toggleScanner() {
+        var btn = document.getElementById('scanBtn');
+
+        if (isScanning) {
+            html5QrCode.stop().then(function() {
+                isScanning = false;
+                btn.textContent = '📷 Start Scanner';
+                btn.classList.remove('scanning');
+            }).catch(function(err) { console.error('Stop error:', err); });
+        } else {
+            if (!html5QrCode) {
+                html5QrCode = new Html5Qrcode('qr-reader');
+            }
+
+            html5QrCode.start(
+                { facingMode: 'environment' },
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                onScanSuccess,
+                onScanError
+            ).then(function() {
+                isScanning = true;
+                btn.textContent = '⏹️ Stop Scanner';
+                btn.classList.add('scanning');
+            }).catch(function(err) {
+                console.error('Camera error:', err);
+                alert('Could not access camera. Please allow camera permission and try again.');
+            });
+        }
+    }
+
+    function onScanSuccess(decodedText) {
+        var code = decodedText;
+
+        // Extract code from URL if needed
+        if (decodedText.indexOf('code=') !== -1) {
+            try {
+                var url = new URL(decodedText);
+                code = url.searchParams.get('code');
+            } catch(e) {
+                // If URL parsing fails, try regex extraction
+                var match = decodedText.match(/code=([A-Z0-9-]+)/);
+                if (match) code = match[1];
+            }
+        }
+
+        if (code && code.match(/^(BHOG|TEST)-[A-Z0-9]{4}$/)) {
+            if (isScanning) toggleScanner();
+            if (navigator.vibrate) navigator.vibrate(200);
+            lookupCode(code);
+        }
+    }
+
+    function onScanError(errorMessage) {
+        // Ignore — fires continuously until a QR is found
+    }
+
+    // ============================================================
+    // Manual code entry
+    // ============================================================
+    function lookupManual() {
+        var code = document.getElementById('manualCode').value.trim().toUpperCase();
+        if (!code) return;
+        lookupCode(code);
+    }
+
+    // ============================================================
+    // Coupon lookup
+    // ============================================================
+    function lookupCode(code) {
+        currentScanCode = code;
+        var resultDiv = document.getElementById('scanResult');
+        var headerDiv = document.getElementById('resultHeader');
+        var detailsDiv = document.getElementById('resultDetails');
+        var redeemBtn = document.getElementById('redeemBtn');
+
+        resultDiv.className = 'scan-result show';
+        headerDiv.textContent = '⏳ Looking up...';
+        detailsDiv.textContent = '';
+        redeemBtn.style.display = 'none';
+
+        jsonpRequest(
+            { action: 'lookup', code: code },
+            function(result) {
+                if (result.status === 'found') {
+                    if (result.redeemed) {
+                        resultDiv.className = 'scan-result show result-redeemed';
+                        headerDiv.textContent = '⚠️ Already Redeemed';
+                        detailsDiv.innerHTML =
+                            '<span>Name:</span> ' + escHtml(result.name) + '<br>' +
+                            '<span>Phone:</span> ' + escHtml(result.phone) + '<br>' +
+                            '<span>Date:</span> ' + escHtml(result.date) + '<br>' +
+                            '<span>Plates:</span> ' + escHtml(String(result.plates)) + '<br>' +
+                            '<span>Code:</span> ' + escHtml(result.couponCode) + '<br>' +
+                            '<span>Redeemed at:</span> ' + escHtml(result.redeemedAt || 'Unknown');
+                        redeemBtn.style.display = 'none';
+                    } else {
+                        resultDiv.className = 'scan-result show result-valid';
+                        headerDiv.textContent = '✅ Valid Coupon';
+                        detailsDiv.innerHTML =
+                            '<span>Name:</span> ' + escHtml(result.name) + '<br>' +
+                            '<span>Phone:</span> ' + escHtml(result.phone) + '<br>' +
+                            '<span>Date:</span> ' + escHtml(result.date) + '<br>' +
+                            '<span>Plates:</span> ' + escHtml(String(result.plates)) + '<br>' +
+                            '<span>Code:</span> ' + escHtml(result.couponCode);
+                        redeemBtn.style.display = 'block';
+                        redeemBtn.disabled = false;
+                        redeemBtn.textContent = '✅ Mark as Redeemed — Give ' + result.plates + ' plate(s)';
+                    }
+                } else {
+                    resultDiv.className = 'scan-result show result-notfound';
+                    headerDiv.textContent = '❌ Coupon Not Found';
+                    detailsDiv.textContent = 'Code "' + code + '" does not exist. Check the code and try again.';
+                    redeemBtn.style.display = 'none';
+                }
+            },
+            function(err) {
+                console.error('Lookup error:', err);
+                resultDiv.className = 'scan-result show result-notfound';
+                headerDiv.textContent = '⚠️ Connection Error';
+                detailsDiv.textContent = 'Could not connect to server. Check your internet and try again.';
+                redeemBtn.style.display = 'none';
+            }
+        );
+    }
+
+    // ============================================================
+    // Redeem coupon
+    // ============================================================
+    function redeemCoupon() {
+        if (!currentScanCode) return;
+
+        var redeemBtn = document.getElementById('redeemBtn');
+        redeemBtn.disabled = true;
+        redeemBtn.textContent = '⏳ Redeeming...';
+
+        jsonpRequest(
+            { action: 'redeem', code: currentScanCode },
+            function(result) {
+                if (result.status === 'success') {
+                    var resultDiv = document.getElementById('scanResult');
+                    var headerDiv = document.getElementById('resultHeader');
+                    resultDiv.className = 'scan-result show result-redeemed';
+                    headerDiv.textContent = '🎉 Redeemed Successfully!';
+                    redeemBtn.textContent = '✅ Done — Plates Given';
+                    redeemBtn.disabled = true;
+
+                    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                    refreshData();
+                } else {
+                    alert('Redeem failed: ' + (result.message || 'Unknown error'));
+                    redeemBtn.disabled = false;
+                    redeemBtn.textContent = '✅ Mark as Redeemed';
+                }
+            },
+            function(err) {
+                console.error('Redeem error:', err);
+                alert('Connection error. Please try again.');
+                redeemBtn.disabled = false;
+                redeemBtn.textContent = '✅ Mark as Redeemed';
+            }
+        );
+    }
+
+    // ============================================================
+    // Search
+    // ============================================================
+    function searchEntries() {
+        var query = document.getElementById('searchInput').value.trim().toLowerCase();
+        if (!query) return;
+
+        var results = allData.filter(function(d) {
+            return d.name.toLowerCase().indexOf(query) !== -1 ||
+                   d.phone.indexOf(query) !== -1 ||
+                   d.couponCode.toLowerCase().indexOf(query) !== -1;
+        });
+
+        renderSearchResults(results);
+    }
+
+    function renderSearchResults(results) {
+        var container = document.getElementById('searchResults');
+
+        if (results.length === 0) {
+            container.innerHTML = '<div class="no-results">No results found</div>';
+            return;
+        }
+
+        var html = '';
+        results.forEach(function(d) {
+            html += '<div class="search-result-item">' +
+                '<div class="info">' +
+                    '<div class="name">' + escHtml(d.name) + '</div>' +
+                    '<div class="meta">' + escHtml(d.phone) + ' · ' + escHtml(d.date) + ' · ' + escHtml(String(d.plates)) + ' plate(s)</div>' +
+                '</div>' +
+                '<div class="code">' + escHtml(d.couponCode) + '</div>' +
+                '<div class="actions">' +
+                    (d.redeemed
+                        ? '<button class="btn-small-redeem redeemed">✅ Done</button>'
+                        : '<button class="btn-small-redeem" onclick="redeemFromList(\'' + escAttr(d.couponCode) + '\', this)">Redeem</button>'
+                    ) +
+                '</div>' +
+            '</div>';
+        });
+
+        container.innerHTML = html;
+    }
+
+    // ============================================================
+    // All entries list
+    // ============================================================
+    function renderAllEntries() {
+        var container = document.getElementById('allEntries');
+
+        if (allData.length === 0) {
+            container.innerHTML = '<div class="no-results">No registrations found</div>';
+            return;
+        }
+
+        var html = '';
+        allData.forEach(function(d) {
+            html += '<div class="search-result-item">' +
+                '<div class="info">' +
+                    '<div class="name">' + escHtml(d.name) + '</div>' +
+                    '<div class="meta">' +
+                        escHtml(d.phone) +
+                        ' <a href="tel:' + escAttr(d.phone) + '" title="Call" style="text-decoration:none;">📞</a>' +
+                        ' <span onclick="copyPhone(\'' + escAttr(d.phone) + '\', this)" title="Copy" style="cursor:pointer;">📋</span>' +
+                        ' · ' + escHtml(d.date) + ' · ' + escHtml(String(d.plates)) + ' plate(s)' +
+                    '</div>' +
+                '</div>' +
+                '<div class="code">' + escHtml(d.couponCode) + '</div>' +
+                '<div class="actions">' +
+                    (d.redeemed
+                        ? '<button class="btn-small-redeem redeemed">✅ Done</button>'
+                        : '<button class="btn-small-redeem" onclick="redeemFromList(\'' + escAttr(d.couponCode) + '\', this)">Redeem</button>'
+                    ) +
+                '</div>' +
+            '</div>';
+        });
+
+        container.innerHTML = html;
+    }
+
+    function copyPhone(phone, el) {
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(phone).then(function() {
+                var orig = el.textContent;
+                el.textContent = '✅';
+                setTimeout(function() { el.textContent = orig; }, 1200);
+            });
+        } else {
+            // Fallback for older browsers
+            var ta = document.createElement('textarea');
+            ta.value = phone;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            var orig = el.textContent;
+            el.textContent = '✅';
+            setTimeout(function() { el.textContent = orig; }, 1200);
+        }
+    }
+
+    // ============================================================
+    // Redeem from list/search
+    // ============================================================
+    function redeemFromList(code, btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳...';
+
+        jsonpRequest(
+            { action: 'redeem', code: code },
+            function(result) {
+                if (result.status === 'success') {
+                    btn.textContent = '✅ Done';
+                    btn.classList.add('redeemed');
+
+                    var entry = allData.find(function(d) { return d.couponCode === code; });
+                    if (entry) entry.redeemed = true;
+                    updateStats();
+                } else {
+                    btn.textContent = 'Retry';
+                    btn.disabled = false;
+                }
+            },
+            function(err) {
+                btn.textContent = 'Retry';
+                btn.disabled = false;
+            }
+        );
+    }
+
+    // ============================================================
+    // Date Management (toggle enable/disable + token limits)
+    // ============================================================
+    function loadDateSettings() {
+        jsonpRequest(
+            { action: 'getDateSettings' },
+            function(result) {
+                if (result.status === 'success') {
+                    renderDateToggles(result.dates);
+                }
+            },
+            function() {
+                document.getElementById('dateToggles').innerHTML =
+                    '<div class="no-results">Could not load date settings</div>';
+            }
+        );
+    }
+
+    function renderDateToggles(dates) {
+        var container = document.getElementById('dateToggles');
+        container.innerHTML = '';
+
+        var today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Build a map from backend dates
+        var dateMap = {};
+        dates.forEach(function(d) {
+            dateMap[d.date] = d;
+        });
+
+        CONFIG.EVENT_DATES.forEach(function(dateStr, index) {
+            var d = new Date(dateStr + 'T00:00:00');
+            var isPast = d < today;
+            var backendData = dateMap[dateStr] || {};
+            var isEnabled = backendData.enabled !== undefined ? backendData.enabled : true;
+            var maxTokens = backendData.maxTokens !== undefined ? backendData.maxTokens : 300;
+            var issuedCount = backendData.issuedCount || 0;
+            var isFull = backendData.isFull || (issuedCount >= maxTokens);
+
+            var dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
+            var dateFormatted = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+            var statusText = '';
+            var statusClass = '';
+            if (isPast) {
+                statusText = 'Past';
+                statusClass = 'past';
+            } else if (isEnabled) {
+                statusText = 'Open';
+                statusClass = 'open';
+            } else {
+                statusText = 'Closed';
+                statusClass = 'closed';
+            }
+
+            var row = document.createElement('div');
+            row.className = 'date-toggle-row';
+
+            row.innerHTML =
+                '<div class="date-info">' +
+                    '<div class="date-day">Day ' + (index + 1) + ' — ' + dayName + '</div>' +
+                    '<div class="date-full">' + dateFormatted + '</div>' +
+                    (isPast ? '<div class="date-past">Auto-closed (past date)</div>' : '') +
+                '</div>' +
+                '<div class="date-controls">' +
+                    '<div class="token-limit-group">' +
+                        '<label>Max:</label>' +
+                        '<input type="number" id="maxTokens_' + index + '" value="' + maxTokens + '" min="0" ' +
+                            (isPast ? 'disabled' : '') +
+                            ' onchange="handleMaxTokensChange(\'' + dateStr + '\', this.value, ' + index + ')">' +
+                    '</div>' +
+                    '<span class="issued-count" id="issuedCount_' + index + '">' + issuedCount + ' / ' + maxTokens + '</span>' +
+                    (isFull ? '<span class="badge-full">Full</span>' : '') +
+                    '<span class="toggle-status ' + statusClass + '" id="toggleStatus_' + index + '">' + statusText + '</span>' +
+                    '<label class="toggle-switch">' +
+                        '<input type="checkbox" id="toggle_' + index + '" ' +
+                            'data-date="' + dateStr + '" ' +
+                            (isEnabled ? 'checked' : '') + ' ' +
+                            (isPast ? 'disabled' : '') +
+                            ' onchange="handleDateToggle(this, ' + index + ')">' +
+                        '<span class="toggle-slider"></span>' +
+                    '</label>' +
+                '</div>';
+
+            container.appendChild(row);
+        });
+    }
+
+    function handleDateToggle(checkbox, index) {
+        var dateStr = checkbox.getAttribute('data-date');
+        var enabled = checkbox.checked;
+        var statusEl = document.getElementById('toggleStatus_' + index);
+
+        // Optimistic UI update
+        statusEl.textContent = enabled ? 'Open' : 'Closed';
+        statusEl.className = 'toggle-status ' + (enabled ? 'open' : 'closed');
+
+        jsonpRequest(
+            { action: 'toggleDate', date: dateStr, enabled: String(enabled) },
+            function(result) {
+                if (result.status !== 'success') {
+                    checkbox.checked = !enabled;
+                    statusEl.textContent = !enabled ? 'Open' : 'Closed';
+                    statusEl.className = 'toggle-status ' + (!enabled ? 'open' : 'closed');
+                    alert('Failed to update date setting');
+                }
+            },
+            function() {
+                checkbox.checked = !enabled;
+                statusEl.textContent = !enabled ? 'Open' : 'Closed';
+                statusEl.className = 'toggle-status ' + (!enabled ? 'open' : 'closed');
+                alert('Connection error. Could not update.');
+            }
+        );
+    }
+
+    function handleMaxTokensChange(dateStr, value, index) {
+        var maxTokens = parseInt(value, 10);
+        if (isNaN(maxTokens) || maxTokens < 0) {
+            alert('Please enter a valid number');
+            return;
+        }
+
+        jsonpRequest(
+            { action: 'setDateLimit', date: dateStr, maxTokens: String(maxTokens) },
+            function(result) {
+                if (result.status === 'success') {
+                    // Update the issued/max display
+                    var issuedEl = document.getElementById('issuedCount_' + index);
+                    if (issuedEl) {
+                        var currentText = issuedEl.textContent;
+                        var issuedNum = parseInt(currentText.split('/')[0].trim(), 10) || 0;
+                        issuedEl.textContent = issuedNum + ' / ' + maxTokens;
+                    }
+                } else {
+                    alert('Failed to update token limit: ' + (result.message || 'Unknown error'));
+                }
+            },
+            function() {
+                alert('Connection error. Could not update token limit.');
+            }
+        );
+    }
+
+    // ============================================================
+    // Walk-in Registration
+    // ============================================================
+    var walkinAutoHideTimer = null;
+
+    function initWalkinTab() {
+        // Set today's date label
+        document.getElementById('walkinDateLabel').textContent = '📅 ' + getTodayFormatted();
+
+        // Set max plates from config
+        var maxPlatesSpan = document.getElementById('walkinMaxPlates');
+        var platesInput = document.getElementById('walkinPlates');
+        if (maxPlatesSpan) maxPlatesSpan.textContent = CONFIG.MAX_PLATES;
+        if (platesInput) platesInput.max = CONFIG.MAX_PLATES;
+    }
+
+    function submitWalkin(e) {
+        e.preventDefault();
+
+        var nameInput = document.getElementById('walkinName');
+        var phoneInput = document.getElementById('walkinPhone');
+        var platesInput = document.getElementById('walkinPlates');
+        var submitBtn = document.getElementById('walkinSubmitBtn');
+
+        var name = nameInput.value.trim();
+        var phone = phoneInput.value.trim();
+        var plates = parseInt(platesInput.value, 10);
+
+        // Validate
+        if (!name) { nameInput.focus(); return; }
+        if (!phone || phone.length !== 10 || !/^\d{10}$/.test(phone)) {
+            alert('Please enter a valid 10-digit phone number');
+            phoneInput.focus();
+            return;
+        }
+        if (isNaN(plates) || plates < 1 || plates > CONFIG.MAX_PLATES || plates !== Math.floor(plates)) {
+            alert('Please enter a valid number of coupons (1-' + CONFIG.MAX_PLATES + ')');
+            platesInput.focus();
+            return;
+        }
+
+        // Disable form
+        submitBtn.disabled = true;
+        submitBtn.textContent = '⏳ Submitting...';
+
+        jsonpRequest(
+            { action: 'walkin', name: name, phone: phone, plates: String(plates) },
+            function(result) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Register & Redeem';
+
+                if (result.status === 'success') {
+                    // Show success
+                    var successDiv = document.getElementById('walkinSuccess');
+                    document.getElementById('walkinSuccessCode').textContent = result.couponCode || result.code || 'Done';
+                    document.getElementById('walkinSuccessMsg').textContent =
+                        (result.updated ? 'Updated' : 'Registered') + ' & Redeemed — ' + plates + ' plate(s)';
+                    successDiv.classList.add('show');
+
+                    // Reset form for next walk-in
+                    nameInput.value = '';
+                    phoneInput.value = '';
+                    platesInput.value = '1';
+                    nameInput.focus();
+
+                    // Auto-hide success after 3 seconds
+                    if (walkinAutoHideTimer) clearTimeout(walkinAutoHideTimer);
+                    walkinAutoHideTimer = setTimeout(function() {
+                        successDiv.classList.remove('show');
+                    }, 3000);
+
+                    // Refresh data in background
+                    refreshData();
+                } else {
+                    alert('Walk-in failed: ' + (result.message || 'Unknown error'));
+                }
+            },
+            function(err) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Register & Redeem';
+                console.error('Walk-in error:', err);
+                alert('Connection error. Please try again.');
+            }
+        );
+    }
+
+    // ============================================================
+    // Summary / Dashboard
+    // ============================================================
+    function loadSummary() {
+        var contentDiv = document.getElementById('summaryContent');
+        contentDiv.innerHTML = '<div class="summary-loading">Loading summary data...</div>';
+
+        jsonpRequest(
+            { action: 'summary' },
+            function(result) {
+                if (result.status === 'success') {
+                    renderSummary(result);
+                } else {
+                    contentDiv.innerHTML = '<div class="no-results">Could not load summary: ' +
+                        escHtml(result.message || 'Unknown error') + '</div>';
+                }
+            },
+            function(err) {
+                console.error('Summary error:', err);
+                contentDiv.innerHTML = '<div class="no-results">Connection error loading summary</div>';
+            }
+        );
+    }
+
+    function renderSummary(data) {
+        var contentDiv = document.getElementById('summaryContent');
+        var today = data.today || {};
+        var days = data.days || [];
+
+        // Compute totals
+        var totRegistered = 0, totWalkins = 0, totCoupons = 0, totRedeemed = 0, totPending = 0;
+        days.forEach(function(day) {
+            totRegistered += (day.registered || 0);
+            totWalkins += (day.walkins || 0);
+            totCoupons += (day.totalCoupons || 0);
+            totRedeemed += (day.redeemed || 0);
+            totPending += (day.pending || 0);
+        });
+
+        var html = '';
+
+        // Today's snapshot cards
+        html += '<h3 style="font-size:16px; color:#555; margin-bottom:12px;">Today\'s Snapshot</h3>';
+        html += '<div class="summary-cards">';
+        html += summaryCardHtml('sc-blue', today.registered || 0, 'Registered (Online)');
+        html += summaryCardHtml('sc-purple', today.walkins || 0, 'Walk-ins');
+        html += summaryCardHtml('sc-teal', today.totalCoupons || 0, 'Total Coupons');
+        html += summaryCardHtml('sc-green', today.redeemed || 0, 'Redeemed');
+        html += summaryCardHtml('sc-orange', today.pending || 0, 'Pending');
+        html += summaryCardHtml('sc-red',
+            (today.maxTokens !== undefined ? ((today.remaining !== undefined ? today.remaining : (today.maxTokens - (today.totalCoupons || 0)))) : '—'),
+            'Remaining' + (today.maxTokens !== undefined ? ' / ' + today.maxTokens + ' Max' : '')
+        );
+        html += '</div>';
+
+        // Day-wise table
+        html += '<h3 style="font-size:16px; color:#555; margin: 20px 0 12px;">Day-wise Breakdown</h3>';
+        html += '<div class="summary-table-wrap">';
+        html += '<table class="summary-table">';
+        html += '<thead><tr>' +
+            '<th>Day</th><th>Date</th><th>Registered</th><th>Walk-ins</th>' +
+            '<th>Total Coupons</th><th>Redeemed</th><th>Pending</th><th>Limit</th>' +
+            '</tr></thead>';
+        html += '<tbody>';
+
+        days.forEach(function(day, idx) {
+            var dateObj = new Date(day.date + 'T00:00:00');
+            var dayLabel = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+            var dateLabel = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+            html += '<tr>' +
+                '<td>Day ' + (idx + 1) + ' (' + dayLabel + ')</td>' +
+                '<td>' + dateLabel + '</td>' +
+                '<td>' + (day.registered || 0) + '</td>' +
+                '<td>' + (day.walkins || 0) + '</td>' +
+                '<td>' + (day.totalCoupons || 0) + '</td>' +
+                '<td>' + (day.redeemed || 0) + '</td>' +
+                '<td>' + (day.pending || 0) + '</td>' +
+                '<td>' + (day.maxTokens !== undefined ? day.maxTokens : '—') + '</td>' +
+                '</tr>';
+        });
+
+        // Totals row
+        html += '<tr class="totals-row">' +
+            '<td colspan="2">Totals</td>' +
+            '<td>' + totRegistered + '</td>' +
+            '<td>' + totWalkins + '</td>' +
+            '<td>' + totCoupons + '</td>' +
+            '<td>' + totRedeemed + '</td>' +
+            '<td>' + totPending + '</td>' +
+            '<td>—</td>' +
+            '</tr>';
+
+        html += '</tbody></table></div>';
+
+        // Print button
+        html += '<div style="margin-top:20px; text-align:right;">' +
+            '<button class="btn-print" onclick="window.print()">🖨️ Print Report</button>' +
+            '</div>';
+
+        contentDiv.innerHTML = html;
+    }
+
+    function summaryCardHtml(colorClass, value, label) {
+        return '<div class="summary-card ' + colorClass + '">' +
+            '<div class="sc-value">' + value + '</div>' +
+            '<div class="sc-label">' + escHtml(label) + '</div>' +
+            '</div>';
+    }
+
+    // ============================================================
+    // Utility: HTML escaping
+    // ============================================================
+    function escHtml(str) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+
+    function escAttr(str) {
+        return str.replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+    }
+
+    // ============================================================
+    // Members — pending pickup for today
+    // ============================================================
+    function loadMembersStatus() {
+        var headerEl = document.getElementById('membersHeader');
+        var listEl = document.getElementById('membersList');
+        headerEl.innerHTML = '<p style="color:#666; font-size:14px;">Loading member data...</p>';
+        listEl.innerHTML = '';
+
+        jsonpRequest(
+            { action: 'getMembersStatus' },
+            function(result) {
+                if (result.status === 'success') {
+                    renderMembers(result);
+                } else {
+                    headerEl.innerHTML = '<p style="color:#e74c3c; font-size:14px;">⚠️ ' + escHtml(result.message || 'Could not load members') + '</p>';
+                }
+            },
+            function() {
+                headerEl.innerHTML = '<p style="color:#e74c3c; font-size:14px;">⚠️ Connection error. Could not load members data.</p>';
+            }
+        );
+    }
+
+    function renderMembers(data) {
+        var headerEl = document.getElementById('membersHeader');
+        var listEl = document.getElementById('membersList');
+
+        var d = new Date(data.date + 'T00:00:00');
+        var dateStr = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+
+        headerEl.innerHTML =
+            '<div class="members-count">' + data.totalPending + ' member(s) pending pickup</div>' +
+            '<div class="members-subtitle">' +
+                dateStr + ' · ' +
+                data.totalRegistered + ' of ' + data.totalMembers + ' members registered' +
+            '</div>';
+
+        listEl.innerHTML = '';
+
+        if (data.pending.length === 0) {
+            listEl.innerHTML = '<div style="text-align:center; color:#27ae60; padding:30px; font-size:15px; font-weight:600;">✅ All registered members have collected their bhog!</div>';
+            return;
+        }
+
+        data.pending.forEach(function(m) {
+            var row = document.createElement('div');
+            row.className = 'member-row';
+            row.innerHTML =
+                '<div class="member-info">' +
+                    '<div class="member-name">' + escHtml(m.name) + '</div>' +
+                    '<div class="member-meta">' + escHtml(m.phone) + ' · ' + m.plates + ' coupon(s) · ' + escHtml(m.couponCode) + '</div>' +
+                '</div>' +
+                '<div class="member-actions">' +
+                    '<a href="tel:' + escAttr(m.phone) + '" class="btn-call">📞 Call</a>' +
+                '</div>';
+            listEl.appendChild(row);
+        });
+    }
+</script>
+
+</body>
+</html>

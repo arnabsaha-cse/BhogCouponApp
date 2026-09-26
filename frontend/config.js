@@ -70,10 +70,19 @@ const CONFIG = {
     EVENT_LOGO_URL: 'agomoni_small_logo.png',
 
     // ──────────────────────────────────────────────────────────
+    // Coupon Prefix
+    // ──────────────────────────────────────────────────────────
+    // Must match COUPON_PREFIX in config.gs for the active environment.
+    // PROD  → 'BHOG'   (coupons look like BHOG-XXXX)
+    // NON_PROD → 'TEST' (coupons look like TEST-XXXX)
+    //
+    COUPON_PREFIX: 'BHOG',
+
+    // ──────────────────────────────────────────────────────────
     // Registration Settings
     // ──────────────────────────────────────────────────────────
     // Max coupons (plates) per date per registration
-    MAX_PLATES: 5,
+    MAX_PLATES: 20,
 
     // ──────────────────────────────────────────────────────────
     // Admin Settings

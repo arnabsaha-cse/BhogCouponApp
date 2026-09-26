@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Event QR Code Generator</title>
+    <title>Bhog Coupon</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f6fa;
+            background: linear-gradient(135deg, #e65100 0%, #ff8f00 50%, #c62828 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -20,225 +20,317 @@
         .container {
             background: #fff;
             border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-            padding: 32px;
-            max-width: 500px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            padding: 28px;
+            max-width: 420px;
             width: 100%;
             text-align: center;
         }
 
-        h1 {
-            font-size: 22px;
-            color: #1a1a2e;
-            margin-bottom: 8px;
-        }
+        .header { margin-bottom: 20px; }
+        .header .logo { max-height: 80px; margin-bottom: 8px; border-radius: 8px; }
+        .header .icon { font-size: 40px; margin-bottom: 6px; }
+        .header h1 { font-size: 20px; color: #c62828; margin-bottom: 2px; }
+        .header .subtitle { font-size: 14px; color: #e65100; font-weight: 600; }
 
-        p {
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 24px;
-        }
-
-        .form-group {
-            margin-bottom: 16px;
-            text-align: left;
-        }
-
-        .form-group label {
-            display: block;
-            font-size: 13px;
-            font-weight: 600;
-            margin-bottom: 6px;
-            color: #333;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            font-size: 14px;
-            outline: none;
-        }
-
-        .form-group input:focus { border-color: #667eea; }
-
-        .btn-generate {
-            width: 100%;
-            padding: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #fff;
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-bottom: 24px;
-        }
-
-        .qr-output {
-            display: none;
-            padding: 24px;
-            border: 2px dashed #e0e0e0;
-            border-radius: 12px;
-            margin-top: 16px;
-        }
-
-        .qr-output.show { display: block; }
-
-        .qr-output h3 {
-            font-size: 16px;
-            margin-bottom: 12px;
-            color: #1a1a2e;
-        }
-
-        .qr-output canvas {
-            border-radius: 8px;
-        }
-
-        .qr-output .url-display {
-            margin-top: 12px;
-            padding: 10px;
-            background: #f0f4ff;
-            border-radius: 8px;
-            font-size: 13px;
-            word-break: break-all;
-            color: #667eea;
-        }
-
-        .btn-download {
+        /* Loading state */
+        .loading { color: #888; font-size: 15px; padding: 40px 0; }
+        .spinner {
             display: inline-block;
-            padding: 10px 24px;
+            width: 24px; height: 24px;
+            border: 3px solid #e0e0e0;
+            border-top-color: #e65100;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            margin-bottom: 12px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Error state */
+        .error-box {
+            display: none;
+            background: #fff3f3;
+            border: 2px solid #e74c3c;
+            border-radius: 12px;
+            padding: 20px;
+            color: #c0392b;
+            font-size: 14px;
+        }
+
+        /* Coupon card */
+        .coupon-card { display: none; }
+
+        .coupon-card .summary-table {
+            width: 100%;
+            text-align: left;
+            background: #f9f9f9;
+            border-radius: 10px;
+            padding: 12px;
+            margin: 14px 0;
+            font-size: 14px;
+        }
+        .coupon-card .summary-table .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .coupon-card .summary-table .info-row:last-child { border-bottom: none; }
+        .coupon-card .summary-table .info-row .label { font-weight: 600; color: #333; }
+        .coupon-card .summary-table .info-row .value { color: #555; }
+
+        .coupon-code-box {
+            background: linear-gradient(135deg, #f0f4ff 0%, #e8ecff 100%);
+            border: 2px dashed #667eea;
+            border-radius: 14px;
+            padding: 18px;
+            margin: 16px 0;
+        }
+        .coupon-code-box .code-label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+        .coupon-code-box .code {
+            font-size: 32px;
+            font-weight: 800;
+            color: #1a1a2e;
+            letter-spacing: 4px;
+        }
+        .coupon-code-box .plates-info {
+            margin-top: 8px;
+            font-size: 15px;
+            color: #e65100;
+            font-weight: 600;
+        }
+
+        .qr-section { margin: 16px 0; }
+        .qr-section p { font-size: 12px; color: #aaa; margin-top: 8px; }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 700;
+            margin: 8px 0 14px;
+        }
+        .status-badge.valid { background: #d4edda; color: #155724; }
+        .status-badge.redeemed { background: #f8d7da; color: #721c24; }
+        .status-badge.loading-status { background: #e2e3e5; color: #383d41; }
+
+        .note {
+            font-size: 11px;
+            color: #aaa;
+            margin-top: 16px;
+            line-height: 1.6;
+        }
+
+        .btn-screenshot {
+            display: inline-block;
+            padding: 10px 20px;
             background: #27ae60;
             color: #fff;
             border: none;
             border-radius: 8px;
-            font-size: 14px;
+            font-size: 13px;
+            font-weight: 600;
             cursor: pointer;
-            margin-top: 12px;
+            margin-top: 10px;
         }
 
-        .btn-print {
-            display: inline-block;
-            padding: 10px 24px;
-            background: #3498db;
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            cursor: pointer;
-            margin-top: 12px;
-            margin-left: 8px;
-        }
-
-        /* Print styles */
         @media print {
             body { background: #fff; }
-            .container { box-shadow: none; max-width: 100%; }
-            .form-group, .btn-generate, .btn-download, .btn-print, p { display: none; }
-            .qr-output { border: none; display: block !important; }
-            .qr-output h3 { font-size: 24px; }
+            .container { box-shadow: none; }
+            .btn-screenshot { display: none; }
         }
-
-        .instructions {
-            margin-top: 24px;
-            padding: 16px;
-            background: #fff3cd;
-            border-radius: 10px;
-            text-align: left;
-            font-size: 13px;
-            line-height: 1.8;
-            color: #856404;
-        }
-
-        .instructions strong { color: #664d03; }
     </style>
 </head>
 <body>
-
 <div class="container">
-    <h1>📱 Event QR Code Generator</h1>
-    <p>Generate a QR code for your bhog distribution event. Print it or display it at the venue.</p>
-
-    <div class="form-group">
-        <label for="regUrl">Registration Page URL</label>
-        <input type="url" id="regUrl" placeholder="https://yourusername.github.io/FoodCouponApp/index.html"
-               value="">
+    <div class="header">
+        <div id="headerLogo" class="icon">🪷</div>
+        <h1>Agomoni Durga Puja 2026</h1>
+        <div class="subtitle">Bhog Distribution Coupon</div>
     </div>
 
-    <div class="form-group">
-        <label for="eventTitle">Event Title (shown above QR)</label>
-        <input type="text" id="eventTitle" value="Bhog Distribution" placeholder="Bhog Distribution">
+    <!-- Loading -->
+    <div class="loading" id="loadingState">
+        <div class="spinner"></div><br>
+        Looking up your coupon...
     </div>
 
-    <button class="btn-generate" onclick="generateQR()">Generate QR Code</button>
+    <!-- Error -->
+    <div class="error-box" id="errorBox"></div>
 
-    <div class="qr-output" id="qrOutput">
-        <h3 id="qrTitle">Bhog Distribution</h3>
-        <p style="color:#666; margin-bottom:12px;">Scan to register for your bhog coupon</p>
-        <div id="qrCanvas"></div>
-        <div class="url-display" id="urlDisplay"></div>
-        <div style="margin-top: 16px;">
-            <button class="btn-download" onclick="downloadQR()">⬇️ Download QR</button>
-            <button class="btn-print" onclick="window.print()">🖨️ Print</button>
+    <!-- Coupon display -->
+    <div class="coupon-card" id="couponCard">
+        <div class="coupon-code-box">
+            <div class="code-label">Your Coupon Code</div>
+            <div class="code" id="dispCode">—</div>
+            <div class="plates-info" id="dispPlates"></div>
         </div>
+
+        <div id="statusBadge" class="status-badge loading-status">Checking...</div>
+
+        <div class="summary-table">
+            <div class="info-row">
+                <span class="label">Name</span>
+                <span class="value" id="dispName">—</span>
+            </div>
+            <div class="info-row">
+                <span class="label">Phone</span>
+                <span class="value" id="dispPhone">—</span>
+            </div>
+            <div class="info-row">
+                <span class="label">Event Date</span>
+                <span class="value" id="dispDate">—</span>
+            </div>
+            <div class="info-row" id="redeemedAtRow" style="display:none;">
+                <span class="label">Redeemed At</span>
+                <span class="value" id="dispRedeemedAt">—</span>
+            </div>
+        </div>
+
+        <div class="qr-section">
+            <div id="qrCanvas"></div>
+            <p>Show this QR or the code above to the organiser</p>
+        </div>
+
+        <button class="btn-screenshot" onclick="screenshotHint()">📸 Screenshot This</button>
     </div>
 
-    <div class="instructions">
-        <strong>How to use this QR code:</strong><br>
-        1. Print it and place it at the bhog distribution venue<br>
-        2. People scan it with their phone camera<br>
-        3. It opens the registration form<br>
-        4. After registering, they get a coupon code on screen + via WhatsApp/SMS<br>
-        5. They show the coupon to you, and you verify it on the admin page
-    </div>
+    <p class="note">This coupon is unique to you. Do not share it. Present it at the distribution point.</p>
 </div>
 
-<!-- Shared config (defines CONFIG.QRCODE_LIB_URL, used below) -->
+<!-- Config -->
 <script src="config.js"></script>
-
-<!-- QR Code library (path comes from config.js, so it's only set in one place) -->
+<!-- QR Code library -->
 <script>document.write('<script src="' + CONFIG.QRCODE_LIB_URL + '"><\/script>');</script>
 
 <script>
-    let qrCanvas = null;
+    // ── Logo ──────────────────────────────────────────────────────
+    (function() {
+        if (CONFIG.EVENT_LOGO_URL) {
+            var el = document.getElementById('headerLogo');
+            var img = document.createElement('img');
+            img.src = CONFIG.EVENT_LOGO_URL;
+            img.alt = 'Event Logo';
+            img.className = 'logo';
+            el.innerHTML = '';
+            el.className = '';
+            el.appendChild(img);
+        }
+    })();
 
-    function generateQR() {
-        const url = document.getElementById('regUrl').value.trim();
-        const title = document.getElementById('eventTitle').value.trim();
+    // ── JSONP helper ──────────────────────────────────────────────
+    var _cbId = 0;
+    function jsonpCall(params, onSuccess, onError) {
+        var cbName = 'couponCb_' + (++_cbId) + '_' + Date.now();
+        params.callback = cbName;
+        var url = CONFIG.APPS_SCRIPT_URL + '?' + new URLSearchParams(params).toString();
+        var script = document.createElement('script');
+        script.src = url;
+        var timeout = setTimeout(function() {
+            cleanup();
+            if (onError) onError('timeout');
+        }, 15000);
+        function cleanup() {
+            clearTimeout(timeout);
+            if (script.parentNode) script.parentNode.removeChild(script);
+            delete window[cbName];
+        }
+        window[cbName] = function(result) { cleanup(); onSuccess(result); };
+        script.onerror = function() { cleanup(); if (onError) onError('network'); };
+        document.body.appendChild(script);
+    }
 
-        if (!url) {
-            alert('Please enter the registration page URL');
-            return;
+    // ── Read ?code= from URL ──────────────────────────────────────
+    function getParam(name) {
+        var params = new URLSearchParams(window.location.search);
+        return params.get(name);
+    }
+
+    // ── Format date nicely ────────────────────────────────────────
+    function fmtDate(dateStr) {
+        try {
+            var d = new Date(dateStr + 'T00:00:00');
+            return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        } catch(e) { return dateStr; }
+    }
+
+    // ── Render coupon data ────────────────────────────────────────
+    function showCoupon(result) {
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('couponCard').style.display = 'block';
+
+        document.getElementById('dispCode').textContent = result.couponCode;
+        document.getElementById('dispPlates').textContent = result.plates + ' coupon(s) / plate(s)';
+        document.getElementById('dispName').textContent = result.name;
+        document.getElementById('dispPhone').textContent = result.phone;
+        document.getElementById('dispDate').textContent = fmtDate(result.date);
+
+        var badge = document.getElementById('statusBadge');
+        if (result.redeemed) {
+            badge.textContent = '✅ Redeemed';
+            badge.className = 'status-badge redeemed';
+            var rat = document.getElementById('redeemedAtRow');
+            rat.style.display = 'flex';
+            document.getElementById('dispRedeemedAt').textContent = result.redeemedAt || 'Unknown';
+        } else {
+            badge.textContent = '🟢 Valid — Not Yet Redeemed';
+            badge.className = 'status-badge valid';
         }
 
-        document.getElementById('qrTitle').textContent = title || 'Bhog Distribution';
-        document.getElementById('urlDisplay').textContent = url;
-
-        const container = document.getElementById('qrCanvas');
-        container.innerHTML = '';
-
-        new QRCode(container, {
-            text: url,
-            width: 300,
-            height: 300,
+        // QR code points to this same page URL (self-referential, useful for re-scanning)
+        var qrContainer = document.getElementById('qrCanvas');
+        qrContainer.innerHTML = '';
+        new QRCode(qrContainer, {
+            text: window.location.href,
+            width: 180,
+            height: 180,
             colorDark: '#1a1a2e',
             colorLight: '#ffffff'
         });
-
-        qrCanvas = container.querySelector('canvas');
-        document.getElementById('qrOutput').classList.add('show');
     }
 
-    function downloadQR() {
-        if (!qrCanvas) return;
-
-        const link = document.createElement('a');
-        link.download = 'bhog-distribution-qr.png';
-        link.href = qrCanvas.toDataURL('image/png');
-        link.click();
+    function showError(msg) {
+        document.getElementById('loadingState').style.display = 'none';
+        var box = document.getElementById('errorBox');
+        box.style.display = 'block';
+        box.innerHTML = '❌ ' + msg;
     }
+
+    function screenshotHint() {
+        alert('📸 Take a screenshot!\n\nOn iPhone: Side + Volume Up\nOn Android: Power + Volume Down');
+    }
+
+    // ── Main: lookup by code ──────────────────────────────────────
+    (function() {
+        var code = getParam('code');
+        if (!code) {
+            showError('No coupon code found in the link. Please use the link provided in your WhatsApp/SMS message.');
+            return;
+        }
+
+        jsonpCall(
+            { action: 'lookup', code: code.toUpperCase() },
+            function(result) {
+                if (result.status === 'found') {
+                    showCoupon(result);
+                } else if (result.status === 'notfound') {
+                    showError('Coupon code <strong>' + code.toUpperCase() + '</strong> was not found. Please check the code and try again.');
+                } else {
+                    showError('Could not load coupon: ' + (result.message || 'Unknown error'));
+                }
+            },
+            function(err) {
+                showError('Connection error. Please check your internet and reload the page.');
+            }
+        );
+    })();
 </script>
-
 </body>
 </html>

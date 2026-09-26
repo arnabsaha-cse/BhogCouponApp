@@ -263,8 +263,14 @@ function registerUser(data) {
       requestedPlates = config.MAX_PLATES_PER_REGISTRATION;
     }
 
-    // --- Token limit check ---
+    // --- Check if date is admin-disabled ---
     var settings = dateSettingsMap[date];
+    if (settings && !settings.enabled) {
+      fullDates.push({ date: date, reason: 'disabled' });
+      continue;
+    }
+
+    // --- Token limit check ---
     if (settings && settings.maxTokens > 0) {
       var issuedCount = getIssuedCountForDate_(date);
       if (issuedCount + requestedPlates > settings.maxTokens) {
@@ -273,19 +279,31 @@ function registerUser(data) {
       }
     }
 
-    // --- Check for existing registration (same phone + date) ---
+    // --- Check for existing registration FIRST (same phone + date) ---
+    // Must be before token limit check so we can correctly calculate net new plates.
     var sheet = getSheetForDate(date);
     var existing = findByPhoneAndDateInSheet_(sheet, phone);
 
     if (existing) {
-      // UPDATE the plate count on the existing row, keep coupon code
+      // UPDATE: existing plates already counted in issuedCount; net change is the delta.
+      // We allow the update even if limit would otherwise block it (it's the same person adjusting).
       sheet.getRange(existing.row, COL.PLATES).setValue(requestedPlates);
       updatedCoupons.push({
         date: date,
         coupons: requestedPlates,
-        couponCode: existing.couponCode
+        couponCode: existing.couponCode,
+        status: 'updated'
       });
       continue;
+    }
+
+    // --- Token limit check (new registrations only) ---
+    if (settings && settings.maxTokens > 0) {
+      var issuedCount = getIssuedCountForDate_(date);
+      if (issuedCount + requestedPlates > settings.maxTokens) {
+        fullDates.push({ date: date, reason: 'full' });
+        continue;
+      }
     }
 
     // --- New registration: generate coupon & write row ---
@@ -593,6 +611,9 @@ function getSummary() {
     var pending = totalRegistrations - redeemed;
     var maxTokens = (dateSettingsMap[tabDate] && dateSettingsMap[tabDate].maxTokens) || 0;
 
+    // pending = people who have NOT redeemed (headcount, not plate count)
+    // This is consistent: registered/walkins/redeemed/pending are all headcounts.
+    // totalCoupons remains the plate (food portion) count.
     var summaryObj = {
       date: tabDate,
       registered: registered,
@@ -600,20 +621,22 @@ function getSummary() {
       totalRegistrations: totalRegistrations,
       totalCoupons: totalCoupons,
       redeemed: redeemed,
-      pending: pending,
+      pending: pending,           // headcount of unredeemed registrations
       maxTokens: maxTokens
     };
 
     dateSummaries.push(summaryObj);
 
     if (tabDate === today) {
-      todaySummary = summaryObj;
+      todaySummary = Object.assign({}, summaryObj, {
+        remaining: (maxTokens > 0) ? Math.max(0, maxTokens - totalCoupons) : undefined
+      });
     }
   }
 
   return {
     status: 'success',
-    dates: dateSummaries,
+    days: dateSummaries,    // FIX: was 'dates' — admin.html reads 'days'
     today: todaySummary
   };
 }
@@ -944,21 +967,22 @@ function sendMultiDateNotifications(name, phone, coupons) {
 
   // Build per-coupon lines with individual coupon links
   var couponLines = coupons.map(function(c) {
+    // Append T12:00:00 so date parsing is midday IST and avoids UTC-midnight off-by-one
     var formattedDate = Utilities.formatDate(
-      new Date(c.date), Session.getScriptTimeZone(), 'EEE, MMM d'
+      new Date(c.date + 'T12:00:00'), Session.getScriptTimeZone(), 'EEE, MMM d'
     );
     var couponUrl = config.APP_BASE_URL + '/coupon.html?code=' + encodeURIComponent(c.couponCode);
     return (
-      '\u{1F4C5} ' + formattedDate + ' \u2014 ' + c.coupons + ' coupon(s) \u2014 *' + c.couponCode + '*\n' +
-      '\u{1F449} ' + couponUrl
+      '\uD83D\uDCC5 ' + formattedDate + ' \u2014 ' + c.coupons + ' coupon(s) \u2014 *' + c.couponCode + '*\n' +
+      '\uD83D\uDC49 ' + couponUrl
     );
   }).join('\n\n');
 
   var messageBody =
-    '\u{1FAB7} *Agomoni Durga Puja \u2014 Bhog Confirmed!*\n\n' +
+    '\uD83E\uDEB7 *Agomoni Durga Puja \u2014 Bhog Confirmed!*\n\n' +
     '\u2705 Name: ' + name + '\n\n' +
     'Your Coupons:\n' + couponLines + '\n\n' +
-    'Joy Ma Durga! \u{1F64F}';
+    'Joy Ma Durga! \uD83D\uDE4F';
 
   // Try WhatsApp first
   if (config.ENABLE_WHATSAPP) {
@@ -979,7 +1003,7 @@ function sendMultiDateNotifications(name, phone, coupons) {
   if (config.ENABLE_SMS) {
     try {
       var smsLines = coupons.map(function(c) {
-        var d = Utilities.formatDate(new Date(c.date), Session.getScriptTimeZone(), 'MMM d');
+        var d = Utilities.formatDate(new Date(c.date + 'T12:00:00'), Session.getScriptTimeZone(), 'MMM d');
         var url = config.APP_BASE_URL + '/coupon.html?code=' + encodeURIComponent(c.couponCode);
         return d + ': ' + c.couponCode + ' (' + c.coupons + ')\n' + url;
       }).join('\n');

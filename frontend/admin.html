@@ -932,8 +932,9 @@
             <p style="color:#999; font-size:13px; margin: 8px 0 16px;">— or enter code manually —</p>
 
             <div class="manual-entry">
-                <input type="text" id="manualCode" placeholder="BHOG-XXXX" maxlength="9"
-                       onkeypress="if(event.key==='Enter') lookupManual()">
+                <input type="text" id="manualCode" maxlength="9"
+                       onkeypress="if(event.key==='Enter') lookupManual()"
+                       style="text-transform:uppercase; letter-spacing:2px;">
                 <button onclick="lookupManual()">Verify</button>
             </div>
 
@@ -979,8 +980,8 @@
                            required pattern="[0-9]{10}" maxlength="10" inputmode="numeric" autocomplete="off">
                 </div>
                 <div class="form-group">
-                    <label for="walkinPlates">Number of Coupons (max <span id="walkinMaxPlates">5</span>)</label>
-                    <input type="number" id="walkinPlates" min="1" max="5" value="1"
+                    <label for="walkinPlates">Number of Coupons (max <span id="walkinMaxPlates">20</span>)</label>
+                    <input type="number" id="walkinPlates" min="1" max="20" value="1"
                            required inputmode="numeric" autocomplete="off">
                 </div>
                 <button type="submit" class="btn-walkin-submit" id="walkinSubmitBtn">
@@ -990,8 +991,11 @@
 
             <div class="walkin-success" id="walkinSuccess">
                 <div class="success-icon">✅</div>
-                <div class="success-code" id="walkinSuccessCode">BHOG-XXXX</div>
+                <div class="success-code" id="walkinSuccessCode">—</div>
                 <div class="success-msg" id="walkinSuccessMsg">Registered &amp; Redeemed successfully</div>
+                <div style="font-size:12px; color:#155724; margin-top:6px;">
+                    No QR needed — coupon issued &amp; redeemed on the spot.
+                </div>
             </div>
         </div>
     </div>
@@ -1098,6 +1102,7 @@
             document.getElementById('adminPanel').style.display = 'block';
             populateDateFilter();
             initWalkinTab();
+            initManualCodeInput();
             refreshData();
         } else {
             document.getElementById('loginError').style.display = 'block';
@@ -1280,9 +1285,15 @@
     // Manual code entry
     // ============================================================
     function lookupManual() {
-        var code = document.getElementById('manualCode').value.trim().toUpperCase();
-        if (!code) return;
+        var input = document.getElementById('manualCode');
+        var code = input.value.trim().toUpperCase();
+        var prefix = (CONFIG.COUPON_PREFIX || 'BHOG') + '-';
+        // Must have at least prefix + 1 char to be a real code
+        if (!code || code.length <= prefix.length) return;
         lookupCode(code);
+        // Reset input to prefix so admin is immediately ready for the next scan
+        input.value = prefix;
+        input.focus();
     }
 
     // ============================================================
@@ -1300,8 +1311,10 @@
         detailsDiv.textContent = '';
         redeemBtn.style.display = 'none';
 
+        // Pass today as a date hint — backend searches today's tab first (faster).
+        // If not found there, it falls back to all other tabs automatically.
         jsonpRequest(
-            { action: 'lookup', code: code },
+            { action: 'lookup', code: code, date: getTodayStr() },
             function(result) {
                 if (result.status === 'found') {
                     if (result.redeemed) {
@@ -1356,7 +1369,7 @@
         redeemBtn.textContent = '⏳ Redeeming...';
 
         jsonpRequest(
-            { action: 'redeem', code: currentScanCode },
+            { action: 'redeem', code: currentScanCode, date: getTodayStr() },
             function(result) {
                 if (result.status === 'success') {
                     var resultDiv = document.getElementById('scanResult');
@@ -1492,7 +1505,7 @@
         btn.textContent = '⏳...';
 
         jsonpRequest(
-            { action: 'redeem', code: code },
+            { action: 'redeem', code: code, date: getTodayStr() },
             function(result) {
                 if (result.status === 'success') {
                     btn.textContent = '✅ Done';
@@ -1671,7 +1684,53 @@
         var maxPlatesSpan = document.getElementById('walkinMaxPlates');
         var platesInput = document.getElementById('walkinPlates');
         if (maxPlatesSpan) maxPlatesSpan.textContent = CONFIG.MAX_PLATES;
-        if (platesInput) platesInput.max = CONFIG.MAX_PLATES;
+        if (platesInput) {
+            platesInput.max = CONFIG.MAX_PLATES;
+            platesInput.setAttribute('max', CONFIG.MAX_PLATES);
+        }
+    }
+
+    // ============================================================
+    // Manual code input — pre-fill prefix so admin types less
+    // ============================================================
+    function initManualCodeInput() {
+        var prefix = (CONFIG.COUPON_PREFIX || 'BHOG') + '-';
+        var input = document.getElementById('manualCode');
+        if (!input) return;
+
+        // Update placeholder and maxlength to match prefix length + 4 chars
+        input.placeholder = prefix + 'XXXX';
+        input.maxLength = prefix.length + 4;
+        input.value = prefix;
+
+        // Keep prefix intact: prevent deleting past the dash
+        input.addEventListener('keydown', function(e) {
+            var minLen = prefix.length;
+            if ((e.key === 'Backspace' || e.key === 'Delete') &&
+                this.selectionStart <= minLen && this.selectionEnd <= minLen) {
+                e.preventDefault();
+            }
+        });
+
+        // Prevent pasting over the prefix
+        input.addEventListener('input', function() {
+            var val = this.value.toUpperCase();
+            if (!val.startsWith(prefix)) {
+                // Recover: extract whatever the user typed after any dash, re-attach prefix
+                var typed = val.replace(/^[A-Z]+-?/, '');
+                this.value = prefix + typed.replace(/[^A-Z0-9]/g, '').substring(0, 4);
+            } else {
+                // Clean up the suffix part (after the dash)
+                var suffix = val.substring(prefix.length).replace(/[^A-Z0-9]/g, '').substring(0, 4);
+                this.value = prefix + suffix;
+            }
+        });
+
+        // Place cursor after the prefix on focus
+        input.addEventListener('focus', function() {
+            var pos = this.value.length;
+            this.setSelectionRange(pos, pos);
+        });
     }
 
     function submitWalkin(e) {

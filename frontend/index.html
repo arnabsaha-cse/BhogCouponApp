@@ -430,8 +430,8 @@
         <div class="qr-container" id="qrContainer"></div>
 
         <p class="msg-note">
-            <strong>📱 A WhatsApp / SMS</strong> with your coupons has been sent to your phone.
-            You can also screenshot this page.
+            <strong>📸 Screenshot this page</strong> to save your coupons.
+            Show the coupon code(s) or QR at the distribution point.
         </p>
 
         <div>
@@ -693,13 +693,18 @@
                 } else if (result.status === 'partial') {
                     showSuccess(result);
                     var msgs = [];
-                    if (result.updated && result.updated.length > 0) {
-                        msgs.push('Updated coupon count for: ' + result.updated.map(function(d) { return d.date; }).join(', '));
-                    }
                     if (result.full && result.full.length > 0) {
-                        msgs.push('These dates are full: ' + result.full.map(function(d) { return d.date; }).join(', '));
+                        var fullDateStrs = result.full.map(function(d) {
+                            var dt = new Date(d.date + 'T00:00:00');
+                            return dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                        });
+                        msgs.push('⚠️ These dates were full or closed: ' + fullDateStrs.join(', '));
                     }
                     if (msgs.length > 0) alert(msgs.join('\n\n'));
+                } else if (result.status === 'full') {
+                    alert('Sorry — all your selected dates have reached their coupon limit. Please contact the organiser.');
+                    btn.disabled = false;
+                    btn.innerHTML = 'Register for Bhog';
                 } else {
                     alert('Registration failed: ' + (result.message || 'Unknown error'));
                     btn.disabled = false;

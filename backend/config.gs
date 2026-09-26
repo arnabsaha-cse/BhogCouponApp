@@ -36,7 +36,7 @@ const NON_PROD = {
 
   // ---------- Google Sheet ----------
   // Create a SEPARATE test spreadsheet for non-prod
-  SPREADSHEET_ID: 'YOUR_TEST_GOOGLE_SHEET_ID_HERE',
+  SPREADSHEET_ID: '1hLB4QC1oTgtR9Q1ZiEkXzoZlfSD_3vZ943ybQl14ckE',
   SHEET_NAME: 'Registrations_Test',
 
   // ---------- Twilio ----------
@@ -59,13 +59,13 @@ const NON_PROD = {
 
   // ---------- Event Settings ----------
   EVENT_DATES: [
-    '2026-10-01',
-    '2026-10-02',
-    '2026-10-03',
-    '2026-10-04',
-    '2026-10-05'
+    '2026-10-16',
+    '2026-10-17',
+    '2026-10-18',
+    '2026-10-19',
+    '2026-10-20'
   ],
-  MAX_PLATES_PER_REGISTRATION: 5,
+  MAX_PLATES_PER_REGISTRATION: 20,
   COUPON_PREFIX: 'TEST',                                     // Coupons will be TEST-XXXX (non-prod only)
 
   // ---------- Members Sheet (external) ----------
@@ -82,7 +82,7 @@ const NON_PROD = {
   ADMIN_PIN: '0000',                                         // Simple PIN for testing
 
   // ---------- Phone Defaults ----------
-  DEFAULT_COUNTRY_CODE: '+1',                                // Change to your country code
+  DEFAULT_COUNTRY_CODE: '+91',                               // India country code
 };
 
 
@@ -118,13 +118,13 @@ const PROD = {
 
   // ---------- Event Settings ----------
   EVENT_DATES: [
-    '2026-10-01',
-    '2026-10-02',
-    '2026-10-03',
-    '2026-10-04',
-    '2026-10-05'
+    '2026-10-16',
+    '2026-10-17',
+    '2026-10-18',
+    '2026-10-19',
+    '2026-10-20'
   ],
-  MAX_PLATES_PER_REGISTRATION: 5,
+  MAX_PLATES_PER_REGISTRATION: 20,
   COUPON_PREFIX: 'BHOG',                                     // Coupons will be BHOG-XXXX
 
   // ---------- Members Sheet (external) ----------
@@ -140,7 +140,7 @@ const PROD = {
   ADMIN_PIN: '1234',                                         // CHANGE THIS to a secure PIN!
 
   // ---------- Phone Defaults ----------
-  DEFAULT_COUNTRY_CODE: '+1',                                // Change to your country code
+  DEFAULT_COUNTRY_CODE: '+91',                               // India country code
 };
 
 

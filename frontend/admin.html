@@ -938,6 +938,20 @@
                 <button onclick="lookupManual()">Verify</button>
             </div>
 
+            <p style="color:#999; font-size:13px; margin: 16px 0 8px;">— or find by name / phone (today only) —</p>
+
+            <div class="manual-entry">
+                <input type="text" id="scannerSearchInput" placeholder="Name or phone number"
+                       style="text-transform:none; letter-spacing:normal;"
+                       onkeypress="if(event.key==='Enter') scannerSearch()">
+                <button onclick="scannerSearch()">Find</button>
+            </div>
+            <label style="display:flex; align-items:center; gap:6px; justify-content:center; margin-top:8px; font-size:12px; color:#666;">
+                <input type="checkbox" id="scannerSearchIncludeRedeemed" onchange="scannerSearch()">
+                Include already-redeemed
+            </label>
+            <div id="scannerSearchResults" style="margin-top:10px; text-align:left;"></div>
+
             <!-- Scan result -->
             <div class="scan-result" id="scanResult">
                 <div class="result-header" id="resultHeader"></div>
@@ -1030,6 +1044,7 @@
 
     <!-- MEMBERS TAB -->
     <div class="tab-content" id="tab-members">
+        <h2 style="font-size:18px; color:#2c3e50; margin-bottom:4px;">👥 Registered but Not Redeemed</h2>
         <div class="members-header" id="membersHeader">
             <p style="color:#666; font-size:14px;">Loading member data...</p>
         </div>
@@ -1294,6 +1309,69 @@
         // Reset input to prefix so admin is immediately ready for the next scan
         input.value = prefix;
         input.focus();
+    }
+
+    // ============================================================
+    // Scanner tab: quick search by name/phone (today only, for speed)
+    // ============================================================
+    var scannerSearchTimer = null;
+    function scannerSearch() {
+        var query = document.getElementById('scannerSearchInput').value.trim();
+        var resultsDiv = document.getElementById('scannerSearchResults');
+        var includeRedeemed = document.getElementById('scannerSearchIncludeRedeemed').checked;
+
+        if (!query) {
+            resultsDiv.innerHTML = '';
+            return;
+        }
+
+        resultsDiv.innerHTML = '<div style="color:#999; font-size:13px; text-align:center; padding:8px;">Searching today\'s entries...</div>';
+
+        // Debounce so we don't fire a request per keystroke
+        if (scannerSearchTimer) clearTimeout(scannerSearchTimer);
+        scannerSearchTimer = setTimeout(function() {
+            jsonpRequest(
+                { action: 'quickSearch', query: query, date: getTodayStr(), includeRedeemed: String(includeRedeemed) },
+                function(result) {
+                    if (result.status === 'success') {
+                        renderScannerSearchResults(result.data || []);
+                    } else {
+                        resultsDiv.innerHTML = '<div class="no-results">' + escHtml(result.message || 'Search failed') + '</div>';
+                    }
+                },
+                function() {
+                    resultsDiv.innerHTML = '<div class="no-results">Connection error while searching</div>';
+                }
+            );
+        }, 300);
+    }
+
+    function renderScannerSearchResults(results) {
+        var resultsDiv = document.getElementById('scannerSearchResults');
+
+        if (results.length === 0) {
+            resultsDiv.innerHTML = '<div class="no-results" style="padding:16px;">No matches for today</div>';
+            return;
+        }
+
+        var html = '';
+        results.slice(0, 15).forEach(function(d) {
+            html += '<div class="search-result-item">' +
+                '<div class="info">' +
+                    '<div class="name">' + escHtml(d.name) + '</div>' +
+                    '<div class="meta">' + escHtml(d.phone) + ' · ' + escHtml(String(d.plates)) + ' plate(s)' +
+                        (d.redeemed ? ' · ✅ redeemed' : '') + '</div>' +
+                '</div>' +
+                '<span class="code">' + escHtml(d.couponCode) + '</span>' +
+                '<div class="actions">' +
+                    '<button class="btn-small-redeem' + (d.redeemed ? ' redeemed' : '') + '" ' +
+                        'onclick="lookupCode(\'' + escAttr(d.couponCode) + '\')">' +
+                        (d.redeemed ? 'View' : 'Select') +
+                    '</button>' +
+                '</div>' +
+            '</div>';
+        });
+        resultsDiv.innerHTML = html;
     }
 
     // ============================================================
@@ -1936,7 +2014,7 @@
         listEl.innerHTML = '';
 
         jsonpRequest(
-            { action: 'getMembersStatus' },
+            { action: 'getMembersStatus', date: getTodayStr() },
             function(result) {
                 if (result.status === 'success') {
                     renderMembers(result);
@@ -1958,11 +2036,8 @@
         var dateStr = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 
         headerEl.innerHTML =
-            '<div class="members-count">' + data.totalPending + ' member(s) pending pickup</div>' +
-            '<div class="members-subtitle">' +
-                dateStr + ' · ' +
-                data.totalRegistered + ' of ' + data.totalMembers + ' members registered' +
-            '</div>';
+            '<div class="members-count">' + data.totalPending + ' member(s) registered but not yet redeemed</div>' +
+            '<div class="members-subtitle">' + dateStr + '</div>';
 
         listEl.innerHTML = '';
 

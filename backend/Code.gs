@@ -93,6 +93,9 @@ function doGet(e) {
       case 'getMembersStatus':
         result = getMembersStatus(params.date);
         break;
+      case 'quickSearch':
+        result = quickSearch(params.query, params.date, params.includeRedeemed);
+        break;
       default:
         result = { status: 'error', message: 'Unknown action: ' + (action || '(none)') };
     }
@@ -197,6 +200,29 @@ function getAllDateSheets_() {
  */
 function getTodayDate_() {
   return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+/**
+ * Safely turn a sheet cell value into a 'yyyy-MM-dd' string.
+ *
+ * IMPORTANT: Google Sheets auto-detects strings that look like dates
+ * (e.g. "2026-10-16") and silently converts the cell to a real Date
+ * object. When that happens, String(cell) no longer equals the plain
+ * "2026-10-16" string used everywhere else in this app, so date
+ * lookups (toggleDate, setDateLimit, settings maps) silently fail to
+ * match and start appending duplicate rows instead of updating the
+ * existing one — which is exactly why toggles weren't "sticking".
+ * Always read DateSettings' Date column through this helper instead
+ * of String(value) directly.
+ *
+ * @param {*} value - Raw cell value (Date object or string)
+ * @returns {string}
+ */
+function normalizeDateStr_(value) {
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  return String(value);
 }
 
 // ============================================================
@@ -324,6 +350,9 @@ function registerUser(data) {
     return { status: 'error', message: 'No valid dates selected' };
   }
 
+  invalidateSummaryCache_();
+  invalidateDateSettingsCache_();
+
   // Send notifications for new + updated coupons (all in one message)
   try {
     sendMultiDateNotifications(name, phone, allCoupons);
@@ -401,6 +430,8 @@ function registerWalkin(data) {
     sheet.appendRow([now, name, phone, plates, couponCode, 'Yes', now, 'Walk-in']);
   }
 
+  invalidateSummaryCache_();
+  invalidateDateSettingsCache_();
   return { status: 'success', couponCode: couponCode, name: name, phone: phone, date: date, plates: plates };
 }
 
@@ -470,6 +501,7 @@ function redeemCoupon(code, date) {
     var sheet = getSheetForDate(entry.date);
     sheet.getRange(entry.row, COL.REDEEMED).setValue('Yes');
     sheet.getRange(entry.row, COL.REDEEMED_AT).setValue(new Date().toISOString());
+    invalidateSummaryCache_();
 
     return {
       status: 'success',
@@ -546,12 +578,75 @@ function readEntriesFromSheet_(sheet, date) {
 }
 
 /**
+ * Fast search used by the Scanner tab's "search by name/phone" box.
+ * Reads ONE date tab only (defaults to today) instead of every date
+ * tab, so it stays quick even as the season's data grows. Matches
+ * name, phone, or coupon code (case-insensitive, substring match).
+ *
+ * @param {string} query           - Search text (name, phone, or code)
+ * @param {string} [date]          - Date tab to search; defaults to today
+ * @param {string} [includeRedeemed] - 'true' to include already-redeemed
+ *                                     entries; defaults to 'false' so the
+ *                                     common "find them, hand them a
+ *                                     plate" flow only shows people who
+ *                                     still need to be served.
+ * @returns {Object} { status, date, data: [...] }
+ */
+function quickSearch(query, date, includeRedeemed) {
+  query = (query || '').toString().trim().toLowerCase();
+  if (!query) return { status: 'error', message: 'Search text is required' };
+
+  var searchDate = date || getTodayDate_();
+  var wantRedeemed = includeRedeemed === 'true' || includeRedeemed === true;
+
+  var ss = getSpreadsheet_();
+  var sheet = ss.getSheetByName(searchDate);
+  if (!sheet) {
+    return { status: 'success', date: searchDate, data: [] };
+  }
+
+  var entries = readEntriesFromSheet_(sheet, searchDate);
+  var results = entries.filter(function(e) {
+    if (!wantRedeemed && e.redeemed) return false;
+    var name = String(e.name || '').toLowerCase();
+    var phone = String(e.phone || '').toLowerCase();
+    var code = String(e.couponCode || '').toLowerCase();
+    return name.indexOf(query) !== -1 ||
+           phone.indexOf(query) !== -1 ||
+           code.indexOf(query) !== -1;
+  });
+
+  return { status: 'success', date: searchDate, data: results };
+}
+
+/**
  * Get a summary of all event dates — registrations, walk-ins,
  * coupon counts, redeemed, pending, and token limits.
  *
  * @returns {Object}
  */
 function getSummary() {
+  // Summary reads every date tab in full, which is the single most
+  // expensive request in this app. Cache it briefly so repeated admin
+  // refreshes (or several devices polling at once) don't all re-read
+  // every sheet — a 20s cache is invisible to admins but cuts load a lot.
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get('summary_v1');
+  if (cached) return JSON.parse(cached);
+
+  var result = computeSummary_();
+  try {
+    cache.put('summary_v1', JSON.stringify(result), 20); // seconds
+  } catch (e) { /* value too large or cache unavailable — ignore */ }
+  return result;
+}
+
+/** Clear the cached summary after any write that would change its numbers. */
+function invalidateSummaryCache_() {
+  try { CacheService.getScriptCache().remove('summary_v1'); } catch (e) { /* ignore */ }
+}
+
+function computeSummary_() {
   var today = getTodayDate_();
   var dateSettingsMap = getDateSettingsMap_();
   var dateSheets = getAllDateSheets_();
@@ -818,7 +913,8 @@ function getDateSettingsMap_() {
   var data = sheet.getDataRange().getValues();
   var map = {};
   for (var i = 1; i < data.length; i++) {
-    var dateStr = String(data[i][0]);
+    var dateStr = normalizeDateStr_(data[i][0]);
+    if (!dateStr) continue;
     map[dateStr] = {
       enabled: data[i][1] === 'Yes',
       maxTokens: parseInt(data[i][2], 10) || 0
@@ -849,6 +945,14 @@ function getDateSettingsSheet() {
     sheet.getRange(1, 1, 1, 3).setFontWeight('bold');
     sheet.setFrozenRows(1);
 
+    // Force column A to Plain Text BEFORE writing any dates. Otherwise
+    // Sheets auto-converts "2026-10-16"-style strings into real Date
+    // objects, which breaks every string comparison against this column
+    // (see normalizeDateStr_ for details). Applying it to the whole
+    // column (not just the rows we're about to fill) means future
+    // appendRow() calls for new dates stay plain text too.
+    sheet.getRange(2, 1, Math.max(sheet.getMaxRows() - 1, 1), 1).setNumberFormat('@');
+
     // Pre-populate with event dates, all enabled, unlimited tokens
     if (config.EVENT_DATES && config.EVENT_DATES.length > 0) {
       var rows = config.EVENT_DATES.map(function(dateStr) {
@@ -856,6 +960,10 @@ function getDateSettingsSheet() {
       });
       sheet.getRange(2, 1, rows.length, 3).setValues(rows);
     }
+  } else {
+    // Safety net for sheets created before this fix: re-assert plain
+    // text formatting on column A so future writes don't get mangled.
+    sheet.getRange(2, 1, Math.max(sheet.getMaxRows() - 1, 1), 1).setNumberFormat('@');
   }
 
   return sheet;
@@ -868,12 +976,34 @@ function getDateSettingsSheet() {
  * @returns {Object}
  */
 function getDateSettings() {
+  // index.html calls this on every page load to decide which dates are
+  // open, and it reads every date tab (for issued counts) on top of the
+  // DateSettings tab itself. Cache briefly so a burst of visitors hitting
+  // the registration page at once doesn't each trigger a full re-read.
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get('dateSettings_v1');
+  if (cached) return JSON.parse(cached);
+
+  var result = computeDateSettings_();
+  try {
+    cache.put('dateSettings_v1', JSON.stringify(result), 15); // seconds
+  } catch (e) { /* ignore */ }
+  return result;
+}
+
+/** Clear the cached date settings after any write that would change them. */
+function invalidateDateSettingsCache_() {
+  try { CacheService.getScriptCache().remove('dateSettings_v1'); } catch (e) { /* ignore */ }
+}
+
+function computeDateSettings_() {
   var sheet = getDateSettingsSheet();
   var data = sheet.getDataRange().getValues();
   var settings = [];
 
   for (var i = 1; i < data.length; i++) {
-    var dateStr = String(data[i][0]);
+    var dateStr = normalizeDateStr_(data[i][0]);
+    if (!dateStr) continue;
     var enabled = data[i][1] === 'Yes';
     var maxTokens = parseInt(data[i][2], 10) || 0;
     var issuedCount = getIssuedCountForDate_(dateStr);
@@ -909,8 +1039,10 @@ function toggleDate(date, enabled) {
   var newValue = (enabled === 'true') ? 'Yes' : 'No';
 
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === date) {
+    if (normalizeDateStr_(data[i][0]) === date) {
       sheet.getRange(i + 1, 2).setValue(newValue);
+      invalidateSummaryCache_();
+      invalidateDateSettingsCache_();
       return {
         status: 'success',
         date: date,
@@ -921,6 +1053,8 @@ function toggleDate(date, enabled) {
 
   // Date not found in settings — add it
   sheet.appendRow([date, newValue, 0]);
+  invalidateSummaryCache_();
+  invalidateDateSettingsCache_();
   return {
     status: 'success',
     date: date,
@@ -947,8 +1081,10 @@ function setDateLimit(date, maxTokens) {
   var data = sheet.getDataRange().getValues();
 
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === date) {
+    if (normalizeDateStr_(data[i][0]) === date) {
       sheet.getRange(i + 1, 3).setValue(limit);
+      invalidateSummaryCache_();
+      invalidateDateSettingsCache_();
       return {
         status: 'success',
         date: date,
@@ -959,11 +1095,53 @@ function setDateLimit(date, maxTokens) {
 
   // Date not found — add it (enabled by default)
   sheet.appendRow([date, 'Yes', limit]);
+  invalidateSummaryCache_();
+  invalidateDateSettingsCache_();
   return {
     status: 'success',
     date: date,
     maxTokens: limit
   };
+}
+
+/**
+ * ONE-TIME REPAIR: run this manually (Apps Script editor > select
+ * fixDateSettingsSheet > Run) if your Dates tab toggles/limits have
+ * "stopped saving". Before the normalizeDateStr_ fix, every toggle or
+ * limit change on an already-mismatched row appended a brand new
+ * duplicate row instead of updating the original, so DateSettings may
+ * now have several rows for the same date. This collapses them down
+ * to one row per date (keeping the LAST row's values, since that's
+ * the most recent edit) and rewrites the Date column as plain text.
+ */
+function fixDateSettingsSheet() {
+  var sheet = getDateSettingsSheet();
+  var data = sheet.getDataRange().getValues();
+
+  var order = [];
+  var latest = {};
+  for (var i = 1; i < data.length; i++) {
+    var dateStr = normalizeDateStr_(data[i][0]);
+    if (!dateStr) continue;
+    if (!(dateStr in latest)) order.push(dateStr);
+    latest[dateStr] = { enabled: data[i][1], maxTokens: data[i][2] };
+  }
+
+  // Clear all existing data rows, then rewrite one clean row per date
+  if (data.length > 1) {
+    sheet.getRange(2, 1, data.length - 1, 3).clearContent();
+  }
+  sheet.getRange(2, 1, Math.max(sheet.getMaxRows() - 1, 1), 1).setNumberFormat('@');
+
+  var rows = order.map(function(dateStr) {
+    return [dateStr, latest[dateStr].enabled, latest[dateStr].maxTokens];
+  });
+  if (rows.length > 0) {
+    sheet.getRange(2, 1, rows.length, 3).setValues(rows);
+  }
+
+  Logger.log('fixDateSettingsSheet: consolidated to ' + rows.length + ' date row(s): ' + order.join(', '));
+  return { status: 'success', dates: order };
 }
 
 // ============================================================
@@ -1097,12 +1275,15 @@ function normalizePhone(phone) {
 }
 
 // ============================================================
-// MEMBERS LOOKUP (cross-references external members sheet)
+// MEMBERS LOOKUP (Members tab lives in the SAME spreadsheet)
 // ============================================================
 
 /**
  * Get registered members who have NOT redeemed their coupons for a given date.
- * Cross-references the external members sheet with the registration data.
+ * Cross-references the "Members" tab (in the SAME spreadsheet as the
+ * registrations) with that date's registration data.
+ *
+ * Members tab format (row 1 = header, skipped): Name | Phone | Email | Notes
  *
  * @param {string} date - Date to check (YYYY-MM-DD). Defaults to today.
  * @returns {Object} { status, date, pending: [{name, phone, plates, couponCode}], totalMembers, totalRegistered, totalPending }
@@ -1116,31 +1297,27 @@ function getMembersStatus(date) {
     date = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyy-MM-dd');
   }
 
-  // Validate members config
-  if (!config.MEMBERS_SPREADSHEET_ID || config.MEMBERS_SPREADSHEET_ID.indexOf('YOUR_') === 0) {
-    return { status: 'error', message: 'Members spreadsheet is not configured. Update MEMBERS_SPREADSHEET_ID in config.gs.' };
-  }
-
-  // Read members sheet
+  // Read members sheet — now a tab named "Members" in the main spreadsheet,
+  // not a separate external spreadsheet (that setup was retired).
   var memberPhones = {};
   try {
-    var memberSS = SpreadsheetApp.openById(config.MEMBERS_SPREADSHEET_ID);
-    var memberSheet = memberSS.getSheetByName(config.MEMBERS_SHEET_NAME || 'Sheet1');
+    var ss = getSpreadsheet_();
+    var memberSheet = ss.getSheetByName(config.MEMBERS_SHEET_NAME || 'Members');
     if (!memberSheet) {
-      return { status: 'error', message: 'Members sheet tab "' + (config.MEMBERS_SHEET_NAME || 'Sheet1') + '" not found.' };
+      return { status: 'error', message: 'No "Members" tab found in the spreadsheet. Add one with columns: Name | Phone | Email | Notes.' };
     }
 
     var memberData = memberSheet.getDataRange().getValues();
     var nameCol = (config.MEMBERS_NAME_COLUMN || 1) - 1;    // Convert to 0-based
     var phoneCol = (config.MEMBERS_PHONE_COLUMN || 2) - 1;  // Convert to 0-based
-    var filterCol = (config.MEMBERS_FILTER_COLUMN || 0) - 1; // -1 means no filter
-    var filterVal = (config.MEMBERS_FILTER_VALUE || 'Membership').toLowerCase();
+    var filterCol = (config.MEMBERS_FILTER_COLUMN || 0) - 1; // -1 means no filter (default)
+    var filterVal = (config.MEMBERS_FILTER_VALUE || '').toLowerCase();
 
     for (var i = 1; i < memberData.length; i++) { // Skip header row
-      // Apply purpose/type filter if configured
-      if (filterCol >= 0) {
+      // Optional purpose/type filter, only applied if configured
+      if (filterCol >= 0 && filterVal) {
         var cellVal = String(memberData[i][filterCol] || '').trim().toLowerCase();
-        if (cellVal !== filterVal) continue; // Skip non-membership rows
+        if (cellVal !== filterVal) continue;
       }
 
       var phone = String(memberData[i][phoneCol] || '').replace(/[\s\-()]/g, '');
@@ -1150,13 +1327,12 @@ function getMembersStatus(date) {
       }
     }
   } catch (err) {
-    return { status: 'error', message: 'Could not read members sheet: ' + err.toString() };
+    return { status: 'error', message: 'Could not read Members tab: ' + err.toString() };
   }
 
   var totalMembers = Object.keys(memberPhones).length;
 
-  // Read today's registrations
-  var ss = SpreadsheetApp.openById(config.SPREADSHEET_ID);
+  // Read that date's registrations (same spreadsheet, already opened above)
   var dateSheet = ss.getSheetByName(date);
 
   if (!dateSheet) {

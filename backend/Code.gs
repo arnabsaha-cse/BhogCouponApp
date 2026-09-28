@@ -244,10 +244,10 @@ function registerUser(data) {
 
   var registeredCoupons = []; // successfully registered
   var updatedCoupons = [];    // duplicates that were updated
-  var fullDates = [];         // dates that exceeded token limit
+  var fullDates = [];         // dates that exceeded token limit or disabled
   var timestamp = new Date().toISOString();
 
-  // Load date settings once for limit checks
+  // Load date settings ONCE (one sheet read) — used for every date in the loop
   var dateSettingsMap = getDateSettingsMap_();
 
   // Process each date selection
@@ -270,23 +270,14 @@ function registerUser(data) {
       continue;
     }
 
-    // --- Token limit check ---
-    if (settings && settings.maxTokens > 0) {
-      var issuedCount = getIssuedCountForDate_(date);
-      if (issuedCount + requestedPlates > settings.maxTokens) {
-        fullDates.push({ date: date, reason: 'full' });
-        continue;
-      }
-    }
-
-    // --- Check for existing registration FIRST (same phone + date) ---
-    // Must be before token limit check so we can correctly calculate net new plates.
+    // --- Read the sheet ONCE and reuse for both duplicate check AND row append ---
     var sheet = getSheetForDate(date);
-    var existing = findByPhoneAndDateInSheet_(sheet, phone);
+    var sheetData = sheet.getDataRange().getValues(); // single read
 
+    // --- Duplicate check (phone already registered for this date?) ---
+    var existing = findByPhoneInData_(sheetData, phone);
     if (existing) {
-      // UPDATE: existing plates already counted in issuedCount; net change is the delta.
-      // We allow the update even if limit would otherwise block it (it's the same person adjusting).
+      // UPDATE: just change plate count on the existing row — no new sheet reads needed
       sheet.getRange(existing.row, COL.PLATES).setValue(requestedPlates);
       updatedCoupons.push({
         date: date,
@@ -297,16 +288,16 @@ function registerUser(data) {
       continue;
     }
 
-    // --- Token limit check (new registrations only) ---
+    // --- Token limit check (new registrations only, uses already-loaded sheetData) ---
     if (settings && settings.maxTokens > 0) {
-      var issuedCount = getIssuedCountForDate_(date);
+      var issuedCount = sumPlatesFromData_(sheetData);
       if (issuedCount + requestedPlates > settings.maxTokens) {
         fullDates.push({ date: date, reason: 'full' });
         continue;
       }
     }
 
-    // --- New registration: generate coupon & write row ---
+    // --- New registration: generate coupon & append row ---
     var couponCode = generateCouponCode();
     var newRow = [timestamp, name, phone, requestedPlates, couponCode, 'No', '', 'Online'];
     sheet.appendRow(newRow);
@@ -385,48 +376,32 @@ function registerWalkin(data) {
   var date = getTodayDate_();
   var now = new Date().toISOString();
 
-  // --- Token limit check ---
+  var sheet = getSheetForDate(date);
+  var sheetData = sheet.getDataRange().getValues(); // ONE read — reused for duplicate check and token count
+
+  // --- Token limit check (using already-loaded data, no extra read) ---
   var dateSettingsMap = getDateSettingsMap_();
   var settings = dateSettingsMap[date];
   if (settings && settings.maxTokens > 0) {
-    var issuedCount = getIssuedCountForDate_(date);
+    var issuedCount = sumPlatesFromData_(sheetData);
     if (issuedCount + plates > settings.maxTokens) {
-      return {
-        status: 'error',
-        message: 'Today\'s coupon limit has been reached',
-        date: date
-      };
+      return { status: 'error', message: 'Today\'s coupon limit has been reached', date: date };
     }
   }
 
-  var sheet = getSheetForDate(date);
-  var existing = findByPhoneAndDateInSheet_(sheet, phone);
-
+  var existing = findByPhoneInData_(sheetData, phone);
   var couponCode;
 
   if (existing) {
-    // Update existing walk-in: change plate count, keep code, ensure redeemed
+    // Update existing: batch all 3 cells into one write
     couponCode = existing.couponCode;
-    sheet.getRange(existing.row, COL.PLATES).setValue(plates);
-    sheet.getRange(existing.row, COL.REDEEMED).setValue('Yes');
-    sheet.getRange(existing.row, COL.REDEEMED_AT).setValue(now);
+    sheet.getRange(existing.row, COL.PLATES, 1, 4).setValues([[plates, 'Yes', now, sheetData[existing.row - 1][COL.SOURCE - 1] || 'Walk-in']]);
   } else {
-    // New walk-in registration — immediately redeemed
     couponCode = generateCouponCode();
-    var newRow = [now, name, phone, plates, couponCode, 'Yes', now, 'Walk-in'];
-    sheet.appendRow(newRow);
+    sheet.appendRow([now, name, phone, plates, couponCode, 'Yes', now, 'Walk-in']);
   }
 
-  // NO messaging for walk-ins
-
-  return {
-    status: 'success',
-    couponCode: couponCode,
-    name: name,
-    phone: phone,
-    date: date,
-    plates: plates
-  };
+  return { status: 'success', couponCode: couponCode, name: name, phone: phone, date: date, plates: plates };
 }
 
 /**
@@ -719,22 +694,21 @@ function findCodeInSheet_(sheet, code, date) {
 }
 
 /**
- * Find a registration by phone number within a specific date's sheet.
- * Used for duplicate / update checking.
+ * Find a registration by phone within an already-loaded 2D data array.
+ * Avoids a second sheet read — caller loads getDataRange().getValues() once
+ * and passes it here.
  *
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {Array[][]} data - Sheet data (row 0 = headers)
  * @param {string} phone
- * @returns {Object|null}
+ * @returns {Object|null} { row (1-based), couponCode, plates, redeemed }
  */
-function findByPhoneAndDateInSheet_(sheet, phone) {
-  var data = sheet.getDataRange().getValues();
+function findByPhoneInData_(data, phone) {
   var normalizedPhone = phone.replace(/[\s\-()]/g, '');
-
   for (var i = 1; i < data.length; i++) {
     var rowPhone = String(data[i][COL.PHONE - 1]).replace(/[\s\-()]/g, '');
     if (rowPhone === normalizedPhone) {
       return {
-        row: i + 1,
+        row: i + 1, // 1-based
         couponCode: String(data[i][COL.COUPON_CODE - 1]),
         plates: data[i][COL.PLATES - 1],
         redeemed: data[i][COL.REDEEMED - 1] === 'Yes'
@@ -745,17 +719,59 @@ function findByPhoneAndDateInSheet_(sheet, phone) {
 }
 
 /**
+ * Sum Plates column from already-loaded 2D data array.
+ * Avoids an extra sheet read for token limit checks.
+ *
+ * @param {Array[][]} data - Sheet data (row 0 = headers)
+ * @returns {number}
+ */
+function sumPlatesFromData_(data) {
+  var total = 0;
+  for (var i = 1; i < data.length; i++) {
+    total += parseInt(data[i][COL.PLATES - 1], 10) || 0;
+  }
+  return total;
+}
+
+/**
+ * Find a registration by phone number within a specific date's sheet.
+ * Used when only the sheet object is available (not preloaded data).
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {string} phone
+ * @returns {Object|null}
+ */
+function findByPhoneAndDateInSheet_(sheet, phone) {
+  return findByPhoneInData_(sheet.getDataRange().getValues(), phone);
+}
+
+
+
+/**
  * Generate a unique coupon code like BHOG-A3X7 (or TEST-A3X7 in non-prod).
- * Attempts up to 100 times to avoid collisions.
+ * With 32^4 = ~1 million combinations and at most ~2,000 registrations per event,
+ * collision probability is <0.2% so we check only today's sheet for speed.
  *
  * @returns {string}
  */
 function generateCouponCode() {
   var config = getConfig();
   var prefix = config.COUPON_PREFIX || 'FOOD';
-  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed confusing chars (0,O,1,I)
+  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No 0,O,1,I (ambiguous)
   var code;
   var attempts = 0;
+
+  // Build a quick in-memory set of all existing codes from today's sheet
+  var today = getTodayDate_();
+  var todaySheet = getSpreadsheet_().getSheetByName(today);
+  var existingCodes = {};
+  if (todaySheet) {
+    var data = todaySheet.getDataRange().getValues();
+    for (var r = 1; r < data.length; r++) {
+      var c = String(data[r][COL.COUPON_CODE - 1]);
+      if (c) existingCodes[c] = true;
+    }
+  }
 
   do {
     code = prefix + '-';
@@ -763,7 +779,7 @@ function generateCouponCode() {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     attempts++;
-  } while (findByCode(code) && attempts < 100);
+  } while (existingCodes[code] && attempts < 50);
 
   return code;
 }

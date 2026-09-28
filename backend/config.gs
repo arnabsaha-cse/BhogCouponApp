@@ -68,15 +68,10 @@ const NON_PROD = {
   MAX_PLATES_PER_REGISTRATION: 20,
   COUPON_PREFIX: 'TEST',                                     // Coupons will be TEST-XXXX (non-prod only)
 
-  // ---------- Members Sheet (external) ----------
-  // Google Sheet ID that contains the members list
-  // The script reads Name and Phone from this sheet
-  MEMBERS_SPREADSHEET_ID: 'YOUR_TEST_MEMBERS_SHEET_ID_HERE',
-  MEMBERS_SHEET_NAME: 'Sheet1',                              // Tab name in the members/receipts spreadsheet
-  MEMBERS_PHONE_COLUMN: 2,                                   // Column number for phone (1-based, e.g., B=2)
-  MEMBERS_NAME_COLUMN: 1,                                    // Column number for name (1-based, e.g., A=1)
-  MEMBERS_FILTER_COLUMN: 0,                                  // Column number for purpose/type filter (1-based, e.g., C=3). Set to 0 to skip filtering.
-  MEMBERS_FILTER_VALUE: 'Membership',                        // Only rows matching this value are treated as members (case-insensitive)
+  // ---------- Members Sheet ----------
+  // Members are now stored in a "Members" tab in the SAME spreadsheet.
+  // Add members directly there: Name | Phone | Email | Notes
+  // No external spreadsheet needed.
 
   // ---------- Admin ----------
   ADMIN_PIN: '0000',                                         // Simple PIN for testing
@@ -127,14 +122,10 @@ const PROD = {
   MAX_PLATES_PER_REGISTRATION: 20,
   COUPON_PREFIX: 'BHOG',                                     // Coupons will be BHOG-XXXX
 
-  // ---------- Members Sheet (external) ----------
-  // Google Sheet ID that contains the members list
-  MEMBERS_SPREADSHEET_ID: 'YOUR_MEMBERS_SHEET_ID_HERE',
-  MEMBERS_SHEET_NAME: 'Sheet1',                              // Tab name in the members/receipts spreadsheet
-  MEMBERS_PHONE_COLUMN: 2,                                   // Column number for phone (1-based, e.g., B=2)
-  MEMBERS_NAME_COLUMN: 1,                                    // Column number for name (1-based, e.g., A=1)
-  MEMBERS_FILTER_COLUMN: 0,                                  // Column number for purpose/type filter (1-based, e.g., C=3). Set to 0 to skip filtering.
-  MEMBERS_FILTER_VALUE: 'Membership',                        // Only rows matching this value are treated as members (case-insensitive)
+  // ---------- Members Sheet ----------
+  // Members are now stored in a "Members" tab in the SAME spreadsheet.
+  // Add members directly there: Name | Phone | Email | Notes
+  // No external spreadsheet needed.
 
   // ---------- Admin ----------
   ADMIN_PIN: '1234',                                         // CHANGE THIS to a secure PIN!

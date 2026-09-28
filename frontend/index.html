@@ -534,6 +534,11 @@
         );
     }
 
+    // "Maha Sasthi" etc. for the Nth event day (from CONFIG.EVENT_DAY_LABELS)
+    function festivalLabel(index) {
+        return (CONFIG.EVENT_DAY_LABELS || [])[index] || '';
+    }
+
     function buildDateRows(dateInfo) {
         var dateRowsContainer = document.getElementById('dateRows');
         dateRowsContainer.innerHTML = '';
@@ -543,7 +548,7 @@
             var isPast = d < today;
             var info = dateInfo[dateStr] || { enabled: true, isFull: false };
             var isAdminDisabled = !info.enabled;
-            var isFull = info.isFull;
+            var isFull = info.isFull && info.maxTokens > 0;
             var isDisabled = isPast || isAdminDisabled || isFull;
 
             var dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
@@ -575,7 +580,7 @@
                     'data-date="' + dateStr + '" ' +
                     (isDisabled ? 'disabled' : '') + '>' +
                 '<label class="date-label" for="check_' + index + '">' +
-                    '<span class="day-name">Day ' + (index + 1) + ' — ' + dayName + '</span><br>' +
+                    '<span class="day-name">Day ' + (index + 1) + (festivalLabel(index) ? ' ' + festivalLabel(index) : '') + ' — ' + dayName + '</span><br>' +
                     '<span class="date-str">' + dateFormatted + '</span>' +
                 '</label>' +
                 statusHtml;
@@ -696,7 +701,9 @@
                     if (result.full && result.full.length > 0) {
                         var fullDateStrs = result.full.map(function(d) {
                             var dt = new Date(d.date + 'T00:00:00');
-                            return dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                            var ei = CONFIG.EVENT_DATES.indexOf(d.date);
+                            return (ei >= 0 && festivalLabel(ei) ? festivalLabel(ei) + ' ' : '') +
+                                dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
                         });
                         msgs.push('⚠️ These dates were full or closed: ' + fullDateStrs.join(', '));
                     }
@@ -736,6 +743,8 @@
         coupons.forEach(function(c, idx) {
             var d = new Date(c.date + 'T00:00:00');
             var dateStr = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            var evIdx = CONFIG.EVENT_DATES.indexOf(c.date);
+            if (evIdx >= 0 && festivalLabel(evIdx)) dateStr = festivalLabel(evIdx) + ' · ' + dateStr;
             var isUpdated = c.status === 'updated';
 
             var item = document.createElement('div');

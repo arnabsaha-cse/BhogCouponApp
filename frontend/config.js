@@ -60,6 +60,27 @@ const CONFIG = {
     ],
 
     // ──────────────────────────────────────────────────────────
+    // Festival Day Names
+    // ──────────────────────────────────────────────────────────
+    // One label per date in EVENT_DATES (same order). Shown beside each day
+    // on the registration page, the admin Dates tab, filters and summary.
+    // Edit the text here and every page updates — nothing else to change.
+    //
+    EVENT_DAY_LABELS: [
+        'Maha Sasthi',      // Day 1 — Friday
+        'Maha Saptami 1',     // Day 2 — Saturday
+        'Maha Saptami 2',   // Day 3 — Sunday
+        'Maha Ashtami',      // Day 4 — Monday
+        'Maha Nabami'       // Day 5 — Tuesday
+    ],
+
+    // ──────────────────────────────────────────────────────────
+    // Default country code (digits only, no +) used to build WhatsApp
+    // links for 10-digit phone numbers on the Members tab.
+    //
+    DEFAULT_COUNTRY_CODE: '91',
+
+    // ──────────────────────────────────────────────────────────
     // Event Logo
     // ──────────────────────────────────────────────────────────
     // URL or relative path to your event logo image.

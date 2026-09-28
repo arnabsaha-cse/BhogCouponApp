@@ -79,7 +79,7 @@ function doGet(e) {
         result = listEntries(params.date || 'all');
         break;
       case 'summary':
-        result = getSummary();
+        result = getSummary(params.date);
         break;
       case 'getDateSettings':
         result = getDateSettings();
@@ -92,6 +92,9 @@ function doGet(e) {
         break;
       case 'getMembersStatus':
         result = getMembersStatus(params.date);
+        break;
+      case 'setMemberRemark':
+        result = setMemberRemark(params.row, params.phone, params.remark);
         break;
       case 'quickSearch':
         result = quickSearch(params.query, params.date, params.includeRedeemed);
@@ -143,22 +146,19 @@ function doPost(e) {
 // SHEET HELPERS — DATE-WISE TABS
 // ============================================================
 
+var _ssCache_ = null;
 /**
- * Opens the spreadsheet by config ID. Cached per execution via CacheService
- * is not needed since SpreadsheetApp handles its own per-execution cache.
+ * Opens the spreadsheet by config ID. Cached for the rest of THIS execution
+ * so helper functions that each call getSpreadsheet_() don't each pay for a
+ * fresh openById() round-trip (that was a big part of the slowness).
  */
 function getSpreadsheet_() {
-  var config = getConfig();
-  return SpreadsheetApp.openById(config.SPREADSHEET_ID);
+  if (!_ssCache_) {
+    _ssCache_ = SpreadsheetApp.openById(getConfig().SPREADSHEET_ID);
+  }
+  return _ssCache_;
 }
 
-/**
- * Get or create a sheet tab for a specific event date.
- * Tab name = date string (e.g. "2026-10-01").
- *
- * @param {string} date - Date string in YYYY-MM-DD format
- * @returns {GoogleAppsScript.Spreadsheet.Sheet}
- */
 function getSheetForDate(date) {
   if (!date) throw new Error('getSheetForDate: date is required');
 
@@ -170,6 +170,11 @@ function getSheetForDate(date) {
     sheet.appendRow(DATE_TAB_HEADERS);
     sheet.getRange(1, 1, 1, DATE_TAB_HEADERS.length).setFontWeight('bold');
     sheet.setFrozenRows(1);
+    // Keep Timestamp / Phone / RedeemedAt as plain text (no auto number/date conversion)
+    var rows = Math.max(sheet.getMaxRows() - 1, 1);
+    sheet.getRange(2, COL.TIMESTAMP, rows, 1).setNumberFormat('@');
+    sheet.getRange(2, COL.PHONE, rows, 1).setNumberFormat('@');
+    sheet.getRange(2, COL.REDEEMED_AT, rows, 1).setNumberFormat('@');
   }
 
   return sheet;
@@ -203,26 +208,79 @@ function getTodayDate_() {
 }
 
 /**
- * Safely turn a sheet cell value into a 'yyyy-MM-dd' string.
- *
- * IMPORTANT: Google Sheets auto-detects strings that look like dates
- * (e.g. "2026-10-16") and silently converts the cell to a real Date
- * object. When that happens, String(cell) no longer equals the plain
- * "2026-10-16" string used everywhere else in this app, so date
- * lookups (toggleDate, setDateLimit, settings maps) silently fail to
- * match and start appending duplicate rows instead of updating the
- * existing one — which is exactly why toggles weren't "sticking".
- * Always read DateSettings' Date column through this helper instead
- * of String(value) directly.
- *
- * @param {*} value - Raw cell value (Date object or string)
- * @returns {string}
+ * Safely turn a DateSettings "Date" cell into a 'yyyy-MM-dd' string.
+ * Handles all three shapes Google Sheets can hand back:
+ *   - plain string  "2026-10-16"
+ *   - Date object   (Sheets auto-converted the text)
+ *   - number        (serial date — happens when a date cell is re-formatted
+ *                    as Plain text; this is what silently broke matching)
+ * Dates are formatted in the SPREADSHEET's timezone (where the cell was
+ * typed), not the script's, so a date can never shift by a day.
  */
 function normalizeDateStr_(value) {
+  if (value === null || value === undefined || value === '') return '';
   if (value instanceof Date) {
-    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    return Utilities.formatDate(value, getSpreadsheet_().getSpreadsheetTimeZone(), 'yyyy-MM-dd');
   }
-  return String(value);
+  if (typeof value === 'number' && value > 30000 && value < 80000) {
+    var ms = Math.round((value - 25569) * 86400 * 1000);
+    return Utilities.formatDate(new Date(ms), 'UTC', 'yyyy-MM-dd');
+  }
+  return String(value).trim();
+}
+
+// ------------------------------------------------------------
+// CELL SANITISERS — the single place raw sheet values become clean
+// JSON-safe values. Google Sheets silently turns phone numbers into
+// NUMBERS and timestamps into Date objects, which crashed the admin
+// page (str.replace / phone.indexOf "is not a function").
+// Every raw-read spot below goes through these.
+// ------------------------------------------------------------
+function cellToStr_(v) {
+  if (v === null || v === undefined) return '';
+  if (v instanceof Date) return v.toISOString();
+  return String(v);
+}
+function phoneToStr_(v) {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'number') return String(Math.round(v));
+  return String(v).trim();
+}
+function digitsOnly_(v) { return phoneToStr_(v).replace(/\D/g, ''); }
+/** Last 10 digits — so "+91 98765 43210", "09876543210" and "9876543210" all match. */
+function last10_(v) {
+  var d = digitsOnly_(v);
+  return d.length > 10 ? d.slice(-10) : d;
+}
+/** Turn one raw date-tab row into a clean entry object. */
+function rowToEntry_(row, date, sheetRow) {
+  return {
+    row: sheetRow,
+    timestamp:  cellToStr_(row[COL.TIMESTAMP - 1]),
+    name:       cellToStr_(row[COL.NAME - 1]).trim(),
+    phone:      phoneToStr_(row[COL.PHONE - 1]),
+    date:       date,
+    plates:     parseInt(row[COL.PLATES - 1], 10) || 0,
+    couponCode: cellToStr_(row[COL.COUPON_CODE - 1]).trim(),
+    redeemed:   String(row[COL.REDEEMED - 1]).toLowerCase() === 'yes',
+    redeemedAt: cellToStr_(row[COL.REDEEMED_AT - 1]),
+    source:     cellToStr_(row[COL.SOURCE - 1]) || 'Online'
+  };
+}
+/** Read data rows (no header) of a date tab. Returns [] for an empty tab. */
+function readDataRows_(sheet, numCols) {
+  var last = sheet.getLastRow();
+  if (last < 2) return [];
+  return sheet.getRange(2, 1, last - 1, numCols || 8).getValues();
+}
+/** Append a row while keeping Timestamp/Phone/RedeemedAt as TEXT so Sheets can't mangle them. */
+function appendEntryRow_(sheet, row) {
+  var r = sheet.getLastRow() + 1;
+  sheet.getRange(r, COL.TIMESTAMP).setNumberFormat('@');
+  sheet.getRange(r, COL.PHONE).setNumberFormat('@');
+  sheet.getRange(r, COL.REDEEMED_AT).setNumberFormat('@');
+  sheet.getRange(r, 1, 1, row.length).setValues([row]);
+  return r;
 }
 
 // ============================================================
@@ -324,9 +382,9 @@ function registerUser(data) {
     }
 
     // --- New registration: generate coupon & append row ---
-    var couponCode = generateCouponCode();
+    var couponCode = generateCouponCode(sheetData);
     var newRow = [timestamp, name, phone, requestedPlates, couponCode, 'No', '', 'Online'];
-    sheet.appendRow(newRow);
+    appendEntryRow_(sheet, newRow);
 
     registeredCoupons.push({
       date: date,
@@ -384,9 +442,10 @@ function registerUser(data) {
 
 /**
  * Register a walk-in guest. Coupons are marked as redeemed immediately.
+ * Runs under a script lock so two volunteers entering the same person at the
+ * same instant can't create two coupons. Uses ONE sheet read.
  *
  * @param {Object} data - { name, phone, plates }
- * @returns {Object} result
  */
 function registerWalkin(data) {
   var config = getConfig();
@@ -397,42 +456,50 @@ function registerWalkin(data) {
   if (!name || !phone) {
     return { status: 'error', message: 'Name and phone are required' };
   }
-
   if (plates > config.MAX_PLATES_PER_REGISTRATION) {
     plates = config.MAX_PLATES_PER_REGISTRATION;
   }
 
-  var date = getTodayDate_();
-  var now = new Date().toISOString();
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(8000); }
+  catch (e) { return { status: 'error', message: 'System busy — please try again in a moment' }; }
 
-  var sheet = getSheetForDate(date);
-  var sheetData = sheet.getDataRange().getValues(); // ONE read — reused for duplicate check and token count
+  try {
+    var date = getTodayDate_();
+    var now = new Date().toISOString();
 
-  // --- Token limit check (using already-loaded data, no extra read) ---
-  var dateSettingsMap = getDateSettingsMap_();
-  var settings = dateSettingsMap[date];
-  if (settings && settings.maxTokens > 0) {
-    var issuedCount = sumPlatesFromData_(sheetData);
-    if (issuedCount + plates > settings.maxTokens) {
-      return { status: 'error', message: 'Today\'s coupon limit has been reached', date: date };
+    var sheet = getSheetForDate(date);
+    var sheetData = sheet.getDataRange().getValues(); // ONE read
+
+    var existing = findByPhoneInData_(sheetData, phone);
+    var existingPlates = existing ? (parseInt(existing.plates, 10) || 0) : 0;
+
+    // Token limit (an existing row is REPLACED, so only count the difference)
+    var settings = getDateSettingsMap_()[date];
+    if (settings && settings.maxTokens > 0) {
+      var issuedCount = sumPlatesFromData_(sheetData) - existingPlates;
+      if (issuedCount + plates > settings.maxTokens) {
+        return { status: 'error', message: 'Today\'s coupon limit has been reached', date: date };
+      }
     }
+
+    var couponCode;
+    if (existing) {
+      couponCode = existing.couponCode;
+      // Columns: Plates | CouponCode | Redeemed | RedeemedAt  (keep the code intact!)
+      sheet.getRange(existing.row, COL.PLATES, 1, 4).setValues([[plates, couponCode, 'Yes', now]]);
+    } else {
+      couponCode = generateCouponCode(sheetData);
+      appendEntryRow_(sheet, [now, name, phone, plates, couponCode, 'Yes', now, 'Walk-in']);
+    }
+
+    invalidateSummaryCache_();
+    invalidateDateSettingsCache_();
+    return { status: 'success', couponCode: couponCode, name: name, phone: phone,
+             date: date, plates: plates, updated: !!existing, timestamp: now };
+  } finally {
+    lock.releaseLock();
   }
-
-  var existing = findByPhoneInData_(sheetData, phone);
-  var couponCode;
-
-  if (existing) {
-    // Update existing: batch all 3 cells into one write
-    couponCode = existing.couponCode;
-    sheet.getRange(existing.row, COL.PLATES, 1, 4).setValues([[plates, 'Yes', now, sheetData[existing.row - 1][COL.SOURCE - 1] || 'Walk-in']]);
-  } else {
-    couponCode = generateCouponCode();
-    sheet.appendRow([now, name, phone, plates, couponCode, 'Yes', now, 'Walk-in']);
-  }
-
-  invalidateSummaryCache_();
-  invalidateDateSettingsCache_();
-  return { status: 'success', couponCode: couponCode, name: name, phone: phone, date: date, plates: plates };
 }
 
 /**
@@ -551,163 +618,140 @@ function listEntries(dateFilter) {
 }
 
 /**
- * Read all data rows from a date-tab sheet and return as entry objects.
- *
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
- * @param {string} date - The date this tab represents
- * @returns {Object[]}
+ * Read all data rows from a date-tab sheet and return CLEAN entry objects
+ * (phone always a string, timestamps always ISO strings, plates a number).
+ * Used by listEntries and quickSearch.
  */
 function readEntriesFromSheet_(sheet, date) {
-  var data = sheet.getDataRange().getValues();
+  var rows = readDataRows_(sheet, 8);
   var entries = [];
-  for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-    entries.push({
-      timestamp: row[COL.TIMESTAMP - 1],
-      name: row[COL.NAME - 1],
-      phone: row[COL.PHONE - 1],
-      date: date,
-      plates: row[COL.PLATES - 1],
-      couponCode: row[COL.COUPON_CODE - 1],
-      redeemed: row[COL.REDEEMED - 1] === 'Yes',
-      redeemedAt: row[COL.REDEEMED_AT - 1] || '',
-      source: row[COL.SOURCE - 1] || 'Online'
-    });
+  for (var i = 0; i < rows.length; i++) {
+    if (!rows[i][COL.COUPON_CODE - 1] && !rows[i][COL.NAME - 1]) continue; // skip blank rows
+    entries.push(rowToEntry_(rows[i], date, i + 2));
   }
   return entries;
 }
 
 /**
- * Fast search used by the Scanner tab's "search by name/phone" box.
- * Reads ONE date tab only (defaults to today) instead of every date
- * tab, so it stays quick even as the season's data grows. Matches
- * name, phone, or coupon code (case-insensitive, substring match).
- *
- * @param {string} query           - Search text (name, phone, or code)
- * @param {string} [date]          - Date tab to search; defaults to today
- * @param {string} [includeRedeemed] - 'true' to include already-redeemed
- *                                     entries; defaults to 'false' so the
- *                                     common "find them, hand them a
- *                                     plate" flow only shows people who
- *                                     still need to be served.
- * @returns {Object} { status, date, data: [...] }
+ * Fast search used by the Scanner tab's "find by name / phone" box.
+ * Reads ONE date tab only (defaults to today). Matches name, coupon code,
+ * or phone — phone matching is digits-only, so "98765 43210", "+91 98765…"
+ * or just the last 4 digits all work.
  */
 function quickSearch(query, date, includeRedeemed) {
   query = (query || '').toString().trim().toLowerCase();
   if (!query) return { status: 'error', message: 'Search text is required' };
 
+  var queryDigits = query.replace(/\D/g, '');
   var searchDate = date || getTodayDate_();
   var wantRedeemed = includeRedeemed === 'true' || includeRedeemed === true;
 
-  var ss = getSpreadsheet_();
-  var sheet = ss.getSheetByName(searchDate);
-  if (!sheet) {
-    return { status: 'success', date: searchDate, data: [] };
-  }
+  var sheet = getSpreadsheet_().getSheetByName(searchDate);
+  if (!sheet) return { status: 'success', date: searchDate, data: [] };
 
-  var entries = readEntriesFromSheet_(sheet, searchDate);
-  var results = entries.filter(function(e) {
+  var results = readEntriesFromSheet_(sheet, searchDate).filter(function(e) {
     if (!wantRedeemed && e.redeemed) return false;
-    var name = String(e.name || '').toLowerCase();
-    var phone = String(e.phone || '').toLowerCase();
-    var code = String(e.couponCode || '').toLowerCase();
-    return name.indexOf(query) !== -1 ||
-           phone.indexOf(query) !== -1 ||
-           code.indexOf(query) !== -1;
+    if (e.name.toLowerCase().indexOf(query) !== -1) return true;
+    if (e.couponCode.toLowerCase().indexOf(query) !== -1) return true;
+    if (queryDigits && digitsOnly_(e.phone).indexOf(queryDigits) !== -1) return true;
+    return false;
   });
 
   return { status: 'success', date: searchDate, data: results };
 }
 
 /**
- * Get a summary of all event dates — registrations, walk-ins,
- * coupon counts, redeemed, pending, and token limits.
- *
- * @returns {Object}
+ * Summary of registrations / walk-ins / coupons / redeemed / pending.
+ * Pass a date to summarise ONE tab (fast); omit or 'all' to read every tab.
+ * Cached 60s per date and cleared on every write.
  */
-function getSummary() {
-  // Summary reads every date tab in full, which is the single most
-  // expensive request in this app. Cache it briefly so repeated admin
-  // refreshes (or several devices polling at once) don't all re-read
-  // every sheet — a 20s cache is invisible to admins but cuts load a lot.
+function getSummary(date) {
+  var scope = (date && date !== 'all') ? date : 'all';
   var cache = CacheService.getScriptCache();
-  var cached = cache.get('summary_v1');
+  var key = 'summary_v2_' + scope;
+  var cached = cache.get(key);
   if (cached) return JSON.parse(cached);
 
-  var result = computeSummary_();
-  try {
-    cache.put('summary_v1', JSON.stringify(result), 20); // seconds
-  } catch (e) { /* value too large or cache unavailable — ignore */ }
+  var result = computeSummary_(scope);
+  try { cache.put(key, JSON.stringify(result), 60); } catch (e) { /* ignore */ }
   return result;
 }
 
-/** Clear the cached summary after any write that would change its numbers. */
+/** Clear every cached summary after any write that would change its numbers. */
 function invalidateSummaryCache_() {
-  try { CacheService.getScriptCache().remove('summary_v1'); } catch (e) { /* ignore */ }
+  try {
+    var cfg = getConfig();
+    var keys = ['summary_v2_all', 'summary_v2_' + getTodayDate_()];
+    (cfg.EVENT_DATES || []).forEach(function(d) { keys.push('summary_v2_' + d); });
+    CacheService.getScriptCache().removeAll(keys);
+  } catch (e) { /* ignore */ }
 }
 
-function computeSummary_() {
+function computeSummary_(scope) {
   var today = getTodayDate_();
-  var dateSettingsMap = getDateSettingsMap_();
-  var dateSheets = getAllDateSheets_();
-  var dateSummaries = [];
-  var todaySummary = null;
+  var single = scope && scope !== 'all';
+  var focusDate = single ? scope : today;
+  var settingsMap = getDateSettingsMap_();
+  var ss = getSpreadsheet_();
+
+  var dateSheets;
+  if (single) {
+    var one = ss.getSheetByName(scope);
+    dateSheets = one ? [one] : [];
+  } else {
+    dateSheets = getAllDateSheets_();
+  }
+
+  var days = [];
+  var focus = null;
 
   for (var i = 0; i < dateSheets.length; i++) {
-    var sheet = dateSheets[i];
-    var tabDate = sheet.getName();
-    var data = sheet.getDataRange().getValues();
+    var tabDate = dateSheets[i].getName();
+    var last = dateSheets[i].getLastRow();
+    // Only read the 5 columns we need: Plates..Source
+    var rows = last >= 2 ? dateSheets[i].getRange(2, COL.PLATES, last - 1, 5).getValues() : [];
 
-    var registered = 0;   // Online source count
-    var walkins = 0;       // Walk-in source count
-    var totalCoupons = 0;  // Sum of Plates
-    var redeemed = 0;      // Redeemed = Yes count
-
-    for (var r = 1; r < data.length; r++) {
-      var source = data[r][COL.SOURCE - 1] || 'Online';
-      var plates = parseInt(data[r][COL.PLATES - 1], 10) || 0;
-      var isRedeemed = data[r][COL.REDEEMED - 1] === 'Yes';
-
-      if (source === 'Online') {
-        registered++;
-      } else if (source === 'Walk-in') {
-        walkins++;
-      }
-      totalCoupons += plates;
-      if (isRedeemed) redeemed++;
+    var registered = 0, walkins = 0, totalCoupons = 0, redeemed = 0;
+    for (var r = 0; r < rows.length; r++) {
+      var source = rows[r][COL.SOURCE - COL.PLATES] || 'Online';
+      if (source === 'Walk-in') walkins++; else registered++;
+      totalCoupons += parseInt(rows[r][0], 10) || 0;
+      if (String(rows[r][COL.REDEEMED - COL.PLATES]).toLowerCase() === 'yes') redeemed++;
     }
 
-    var totalRegistrations = registered + walkins;
-    var pending = totalRegistrations - redeemed;
-    var maxTokens = (dateSettingsMap[tabDate] && dateSettingsMap[tabDate].maxTokens) || 0;
-
-    // pending = people who have NOT redeemed (headcount, not plate count)
-    // This is consistent: registered/walkins/redeemed/pending are all headcounts.
-    // totalCoupons remains the plate (food portion) count.
-    var summaryObj = {
+    var maxTokens = (settingsMap[tabDate] && settingsMap[tabDate].maxTokens) || 0;
+    var obj = {
       date: tabDate,
       registered: registered,
       walkins: walkins,
-      totalRegistrations: totalRegistrations,
+      totalRegistrations: registered + walkins,
       totalCoupons: totalCoupons,
       redeemed: redeemed,
-      pending: pending,           // headcount of unredeemed registrations
+      pending: (registered + walkins) - redeemed,
       maxTokens: maxTokens
     };
+    days.push(obj);
 
-    dateSummaries.push(summaryObj);
-
-    if (tabDate === today) {
-      todaySummary = Object.assign({}, summaryObj, {
+    if (tabDate === focusDate) {
+      focus = Object.assign({}, obj, {
         remaining: (maxTokens > 0) ? Math.max(0, maxTokens - totalCoupons) : undefined
       });
     }
   }
 
+  if (!focus && single) {
+    var mt = (settingsMap[focusDate] && settingsMap[focusDate].maxTokens) || 0;
+    focus = { date: focusDate, registered: 0, walkins: 0, totalRegistrations: 0, totalCoupons: 0,
+              redeemed: 0, pending: 0, maxTokens: mt, remaining: mt > 0 ? mt : undefined };
+  }
+
   return {
     status: 'success',
-    days: dateSummaries,    // FIX: was 'dates' — admin.html reads 'days'
-    today: todaySummary
+    days: days,
+    today: focus,            // "focus" day: the selected date, or real today
+    focusDate: focusDate,
+    isToday: focusDate === today,
+    scope: single ? scope : 'all'
   };
 }
 
@@ -760,53 +804,34 @@ function findByCode(code, date) {
 }
 
 /**
- * Search a single sheet for a coupon code.
- *
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
- * @param {string} code
- * @param {string} date - The date this tab represents
- * @returns {Object|null}
+ * Search a single sheet for a coupon code. Used by lookupCoupon and redeemCoupon.
+ * Returns a clean entry (plus 1-based sheet `row`) or null.
  */
 function findCodeInSheet_(sheet, code, date) {
-  var data = sheet.getDataRange().getValues();
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][COL.COUPON_CODE - 1]).toUpperCase() === code) {
-      return {
-        row: i + 1, // 1-based sheet row
-        date: date,
-        timestamp: data[i][COL.TIMESTAMP - 1],
-        name: data[i][COL.NAME - 1],
-        phone: data[i][COL.PHONE - 1],
-        plates: data[i][COL.PLATES - 1],
-        couponCode: String(data[i][COL.COUPON_CODE - 1]),
-        redeemed: data[i][COL.REDEEMED - 1] === 'Yes',
-        redeemedAt: data[i][COL.REDEEMED_AT - 1] || '',
-        source: data[i][COL.SOURCE - 1] || 'Online'
-      };
+  var rows = readDataRows_(sheet, 8);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][COL.COUPON_CODE - 1]).trim().toUpperCase() === code) {
+      return rowToEntry_(rows[i], date, i + 2);
     }
   }
   return null;
 }
 
 /**
- * Find a registration by phone within an already-loaded 2D data array.
- * Avoids a second sheet read — caller loads getDataRange().getValues() once
- * and passes it here.
- *
- * @param {Array[][]} data - Sheet data (row 0 = headers)
- * @param {string} phone
- * @returns {Object|null} { row (1-based), couponCode, plates, redeemed }
+ * Find a registration by phone within an already-loaded 2D data array
+ * (row 0 = headers). Compares the LAST 10 DIGITS so formatting differences
+ * (+91, spaces, leading 0, numeric cells) never cause a missed duplicate.
  */
 function findByPhoneInData_(data, phone) {
-  var normalizedPhone = phone.replace(/[\s\-()]/g, '');
+  var target = last10_(phone);
+  if (!target) return null;
   for (var i = 1; i < data.length; i++) {
-    var rowPhone = String(data[i][COL.PHONE - 1]).replace(/[\s\-()]/g, '');
-    if (rowPhone === normalizedPhone) {
+    if (last10_(data[i][COL.PHONE - 1]) === target) {
       return {
         row: i + 1, // 1-based
         couponCode: String(data[i][COL.COUPON_CODE - 1]),
         plates: data[i][COL.PLATES - 1],
-        redeemed: data[i][COL.REDEEMED - 1] === 'Yes'
+        redeemed: String(data[i][COL.REDEEMED - 1]).toLowerCase() === 'yes'
       };
     }
   }
@@ -843,39 +868,31 @@ function findByPhoneAndDateInSheet_(sheet, phone) {
 
 
 /**
- * Generate a unique coupon code like BHOG-A3X7 (or TEST-A3X7 in non-prod).
- * With 32^4 = ~1 million combinations and at most ~2,000 registrations per event,
- * collision probability is <0.2% so we check only today's sheet for speed.
- *
- * @returns {string}
+ * Generate a coupon code like BHOG-A3X7. If the caller already has the tab's
+ * data loaded (2D array incl. header) pass it in — no extra sheet read.
  */
-function generateCouponCode() {
+function generateCouponCode(existingData) {
   var config = getConfig();
   var prefix = config.COUPON_PREFIX || 'FOOD';
   var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No 0,O,1,I (ambiguous)
-  var code;
-  var attempts = 0;
 
-  // Build a quick in-memory set of all existing codes from today's sheet
-  var today = getTodayDate_();
-  var todaySheet = getSpreadsheet_().getSheetByName(today);
+  var data = existingData;
+  if (!data) {
+    var todaySheet = getSpreadsheet_().getSheetByName(getTodayDate_());
+    data = todaySheet ? todaySheet.getDataRange().getValues() : [];
+  }
   var existingCodes = {};
-  if (todaySheet) {
-    var data = todaySheet.getDataRange().getValues();
-    for (var r = 1; r < data.length; r++) {
-      var c = String(data[r][COL.COUPON_CODE - 1]);
-      if (c) existingCodes[c] = true;
-    }
+  for (var r = 1; r < data.length; r++) {
+    var c = String(data[r][COL.COUPON_CODE - 1]);
+    if (c) existingCodes[c] = true;
   }
 
+  var code, attempts = 0;
   do {
     code = prefix + '-';
-    for (var j = 0; j < 4; j++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
+    for (var j = 0; j < 4; j++) code += chars.charAt(Math.floor(Math.random() * chars.length));
     attempts++;
   } while (existingCodes[code] && attempts < 50);
-
   return code;
 }
 
@@ -883,40 +900,27 @@ function generateCouponCode() {
 // DAILY TOKEN LIMIT HELPERS
 // ============================================================
 
-/**
- * Get total issued plates (sum of Plates column) for a given date.
- *
- * @param {string} date
- * @returns {number}
- */
+/** Total issued plates for a date — reads ONLY the Plates column. */
 function getIssuedCountForDate_(date) {
-  var ss = getSpreadsheet_();
-  var sheet = ss.getSheetByName(date);
+  var sheet = getSpreadsheet_().getSheetByName(date);
   if (!sheet) return 0;
-
-  var data = sheet.getDataRange().getValues();
+  var last = sheet.getLastRow();
+  if (last < 2) return 0;
+  var vals = sheet.getRange(2, COL.PLATES, last - 1, 1).getValues();
   var total = 0;
-  for (var i = 1; i < data.length; i++) {
-    total += parseInt(data[i][COL.PLATES - 1], 10) || 0;
-  }
+  for (var i = 0; i < vals.length; i++) total += parseInt(vals[i][0], 10) || 0;
   return total;
 }
 
-/**
- * Build a map of date -> { enabled, maxTokens } from the DateSettings sheet.
- * Used internally for fast lookups.
- *
- * @returns {Object} map keyed by date string
- */
+/** date -> { enabled, maxTokens }. Last row wins if a date is duplicated. */
 function getDateSettingsMap_() {
-  var sheet = getDateSettingsSheet();
-  var data = sheet.getDataRange().getValues();
+  var data = getDateSettingsSheet().getDataRange().getValues();
   var map = {};
   for (var i = 1; i < data.length; i++) {
     var dateStr = normalizeDateStr_(data[i][0]);
     if (!dateStr) continue;
     map[dateStr] = {
-      enabled: data[i][1] === 'Yes',
+      enabled: String(data[i][1]).toLowerCase() === 'yes',
       maxTokens: parseInt(data[i][2], 10) || 0
     };
   }
@@ -929,10 +933,11 @@ function getDateSettingsMap_() {
 // ============================================================
 
 /**
- * Get or create the DateSettings sheet.
- * Pre-populated with EVENT_DATES from config, all enabled, MaxTokens=0 (unlimited).
- *
- * @returns {GoogleAppsScript.Spreadsheet.Sheet}
+ * Get or create the DateSettings sheet (Date | Enabled | MaxTokens).
+ * NOTE: the plain-text formatting is only applied when the sheet is CREATED
+ * (or by fixDateSettingsSheet). It used to be re-applied on every call, which
+ * was a slow write on every request AND converted existing date cells to
+ * serial numbers — the root cause of "max shows 0" / toggles not sticking.
  */
 function getDateSettingsSheet() {
   var config = getConfig();
@@ -944,28 +949,13 @@ function getDateSettingsSheet() {
     sheet.appendRow(['Date', 'Enabled', 'MaxTokens']);
     sheet.getRange(1, 1, 1, 3).setFontWeight('bold');
     sheet.setFrozenRows(1);
-
-    // Force column A to Plain Text BEFORE writing any dates. Otherwise
-    // Sheets auto-converts "2026-10-16"-style strings into real Date
-    // objects, which breaks every string comparison against this column
-    // (see normalizeDateStr_ for details). Applying it to the whole
-    // column (not just the rows we're about to fill) means future
-    // appendRow() calls for new dates stay plain text too.
     sheet.getRange(2, 1, Math.max(sheet.getMaxRows() - 1, 1), 1).setNumberFormat('@');
 
-    // Pre-populate with event dates, all enabled, unlimited tokens
     if (config.EVENT_DATES && config.EVENT_DATES.length > 0) {
-      var rows = config.EVENT_DATES.map(function(dateStr) {
-        return [dateStr, 'Yes', 0];
-      });
+      var rows = config.EVENT_DATES.map(function(dateStr) { return [dateStr, 'Yes', 0]; });
       sheet.getRange(2, 1, rows.length, 3).setValues(rows);
     }
-  } else {
-    // Safety net for sheets created before this fix: re-assert plain
-    // text formatting on column A so future writes don't get mangled.
-    sheet.getRange(2, 1, Math.max(sheet.getMaxRows() - 1, 1), 1).setNumberFormat('@');
   }
-
   return sheet;
 }
 
@@ -997,77 +987,70 @@ function invalidateDateSettingsCache_() {
 }
 
 function computeDateSettings_() {
-  var sheet = getDateSettingsSheet();
-  var data = sheet.getDataRange().getValues();
-  var settings = [];
+  var data = getDateSettingsSheet().getDataRange().getValues();
+  var order = [];
+  var byDate = {};
 
+  // If duplicate rows exist for a date, the LAST one wins (same rule as getDateSettingsMap_)
   for (var i = 1; i < data.length; i++) {
     var dateStr = normalizeDateStr_(data[i][0]);
     if (!dateStr) continue;
-    var enabled = data[i][1] === 'Yes';
-    var maxTokens = parseInt(data[i][2], 10) || 0;
-    var issuedCount = getIssuedCountForDate_(dateStr);
-    var isFull = (maxTokens > 0) && (issuedCount >= maxTokens);
-
-    settings.push({
-      date: dateStr,
-      enabled: enabled,
-      maxTokens: maxTokens,
-      issuedCount: issuedCount,
-      isFull: isFull
-    });
+    if (!(dateStr in byDate)) order.push(dateStr);
+    byDate[dateStr] = {
+      enabled: String(data[i][1]).toLowerCase() === 'yes',
+      maxTokens: parseInt(data[i][2], 10) || 0
+    };
   }
 
-  return {
-    status: 'success',
-    dates: settings
-  };
+  var settings = order.map(function(dateStr) {
+    var s = byDate[dateStr];
+    var issuedCount = getIssuedCountForDate_(dateStr);
+    return {
+      date: dateStr,
+      enabled: s.enabled,
+      maxTokens: s.maxTokens,
+      issuedCount: issuedCount,
+      isFull: s.maxTokens > 0 && issuedCount >= s.maxTokens
+    };
+  });
+
+  return { status: 'success', dates: settings };
 }
 
-/**
- * Toggle a date's enabled/disabled status.
- *
- * @param {string} date    - Date string (YYYY-MM-DD)
- * @param {string} enabled - 'true' or 'false'
- * @returns {Object}
- */
+/** Toggle a date's enabled/disabled status (updates EVERY row for that date). */
 function toggleDate(date, enabled) {
   if (!date) return { status: 'error', message: 'Date is required' };
 
   var sheet = getDateSettingsSheet();
   var data = sheet.getDataRange().getValues();
-  var newValue = (enabled === 'true') ? 'Yes' : 'No';
+  var newValue = (enabled === 'true' || enabled === true) ? 'Yes' : 'No';
+  var found = false;
 
   for (var i = 1; i < data.length; i++) {
     if (normalizeDateStr_(data[i][0]) === date) {
       sheet.getRange(i + 1, 2).setValue(newValue);
-      invalidateSummaryCache_();
-      invalidateDateSettingsCache_();
-      return {
-        status: 'success',
-        date: date,
-        enabled: newValue === 'Yes'
-      };
+      found = true;
     }
   }
+  if (!found) appendSettingsRow_(sheet, date, newValue, 0);
 
-  // Date not found in settings — add it
-  sheet.appendRow([date, newValue, 0]);
   invalidateSummaryCache_();
   invalidateDateSettingsCache_();
-  return {
-    status: 'success',
-    date: date,
-    enabled: newValue === 'Yes'
-  };
+  return { status: 'success', date: date, enabled: newValue === 'Yes' };
+}
+
+/** Append a DateSettings row with the date stored as TEXT. */
+function appendSettingsRow_(sheet, date, enabled, limit) {
+  var r = sheet.getLastRow() + 1;
+  sheet.getRange(r, 1).setNumberFormat('@');
+  sheet.getRange(r, 1, 1, 3).setValues([[date, enabled, limit]]);
 }
 
 /**
- * Set the maximum token (coupon) limit for a specific date.
- *
- * @param {string} date      - Date string (YYYY-MM-DD)
- * @param {string|number} maxTokens - Maximum coupons allowed (0 = unlimited)
- * @returns {Object}
+ * Set the max coupon limit for a date (0 = unlimited).
+ * Updates EVERY row for that date. Previously it only updated the FIRST
+ * matching row while reads used the LAST one — so with duplicate rows the
+ * new 300 was saved but the old 0 was what got displayed.
  */
 function setDateLimit(date, maxTokens) {
   if (!date) return { status: 'error', message: 'Date is required' };
@@ -1079,40 +1062,27 @@ function setDateLimit(date, maxTokens) {
 
   var sheet = getDateSettingsSheet();
   var data = sheet.getDataRange().getValues();
+  var found = false;
 
   for (var i = 1; i < data.length; i++) {
     if (normalizeDateStr_(data[i][0]) === date) {
       sheet.getRange(i + 1, 3).setValue(limit);
-      invalidateSummaryCache_();
-      invalidateDateSettingsCache_();
-      return {
-        status: 'success',
-        date: date,
-        maxTokens: limit
-      };
+      found = true;
     }
   }
+  if (!found) appendSettingsRow_(sheet, date, 'Yes', limit);
 
-  // Date not found — add it (enabled by default)
-  sheet.appendRow([date, 'Yes', limit]);
   invalidateSummaryCache_();
   invalidateDateSettingsCache_();
-  return {
-    status: 'success',
-    date: date,
-    maxTokens: limit
-  };
+  var issued = getIssuedCountForDate_(date);
+  return { status: 'success', date: date, maxTokens: limit, issuedCount: issued,
+           isFull: limit > 0 && issued >= limit };
 }
 
 /**
- * ONE-TIME REPAIR: run this manually (Apps Script editor > select
- * fixDateSettingsSheet > Run) if your Dates tab toggles/limits have
- * "stopped saving". Before the normalizeDateStr_ fix, every toggle or
- * limit change on an already-mismatched row appended a brand new
- * duplicate row instead of updating the original, so DateSettings may
- * now have several rows for the same date. This collapses them down
- * to one row per date (keeping the LAST row's values, since that's
- * the most recent edit) and rewrites the Date column as plain text.
+ * ONE-TIME REPAIR — run from the Apps Script editor (Run > fixDateSettingsSheet).
+ * Collapses duplicate DateSettings rows to one per date (keeping the LAST
+ * row's values) and rewrites the Date column as plain text.
  */
 function fixDateSettingsSheet() {
   var sheet = getDateSettingsSheet();
@@ -1127,21 +1097,42 @@ function fixDateSettingsSheet() {
     latest[dateStr] = { enabled: data[i][1], maxTokens: data[i][2] };
   }
 
-  // Clear all existing data rows, then rewrite one clean row per date
-  if (data.length > 1) {
-    sheet.getRange(2, 1, data.length - 1, 3).clearContent();
-  }
+  if (data.length > 1) sheet.getRange(2, 1, data.length - 1, 3).clearContent();
   sheet.getRange(2, 1, Math.max(sheet.getMaxRows() - 1, 1), 1).setNumberFormat('@');
 
   var rows = order.map(function(dateStr) {
     return [dateStr, latest[dateStr].enabled, latest[dateStr].maxTokens];
   });
-  if (rows.length > 0) {
-    sheet.getRange(2, 1, rows.length, 3).setValues(rows);
-  }
+  if (rows.length > 0) sheet.getRange(2, 1, rows.length, 3).setValues(rows);
 
+  invalidateDateSettingsCache_();
+  invalidateSummaryCache_();
   Logger.log('fixDateSettingsSheet: consolidated to ' + rows.length + ' date row(s): ' + order.join(', '));
   return { status: 'success', dates: order };
+}
+
+/**
+ * ONE-TIME REPAIR — run from the editor (Run > fixDateTabFormats).
+ * For every existing date tab: forces Timestamp / Phone / RedeemedAt to plain
+ * text and rewrites numeric phone cells as text so nothing gets converted again.
+ */
+function fixDateTabFormats() {
+  getAllDateSheets_().forEach(function(sheet) {
+    var last = sheet.getLastRow();
+    if (last < 2) return;
+    var n = last - 1;
+    [COL.TIMESTAMP, COL.PHONE, COL.REDEEMED_AT].forEach(function(c) {
+      var rng = sheet.getRange(2, c, n, 1);
+      var vals = rng.getValues().map(function(r) {
+        var v = r[0];
+        return [c === COL.PHONE ? phoneToStr_(v) : cellToStr_(v)];
+      });
+      rng.setNumberFormat('@');
+      rng.setValues(vals);
+    });
+    Logger.log('Fixed formats on tab ' + sheet.getName());
+  });
+  invalidateSummaryCache_();
 }
 
 // ============================================================
@@ -1279,120 +1270,119 @@ function normalizePhone(phone) {
 // ============================================================
 
 /**
- * Get registered members who have NOT redeemed their coupons for a given date.
- * Cross-references the "Members" tab (in the SAME spreadsheet as the
- * registrations) with that date's registration data.
+ * Members list for a date, cross-referenced with that date's registrations.
  *
- * Members tab format (row 1 = header, skipped): Name | Phone | Email | Notes
+ * Members tab columns: Name | Phone | Email | Notes | Remarks | RemarksUpdated
+ * (Remarks + RemarksUpdated are added automatically the first time a remark is saved.)
  *
- * @param {string} date - Date to check (YYYY-MM-DD). Defaults to today.
- * @returns {Object} { status, date, pending: [{name, phone, plates, couponCode}], totalMembers, totalRegistered, totalPending }
+ * Each member gets status: 'not_registered' | 'registered' (has coupon, not collected) | 'redeemed'
  */
 function getMembersStatus(date) {
   var config = getConfig();
+  if (!date) date = getTodayDate_();
 
-  // Default to today
-  if (!date) {
-    var today = new Date();
-    date = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var ss = getSpreadsheet_();
+  var memberSheet = ss.getSheetByName(config.MEMBERS_SHEET_NAME || 'Members');
+  if (!memberSheet) {
+    return { status: 'error', message: 'No "Members" tab found in the spreadsheet. Add one with columns: Name | Phone | Email | Notes.' };
   }
 
-  // Read members sheet — now a tab named "Members" in the main spreadsheet,
-  // not a separate external spreadsheet (that setup was retired).
-  var memberPhones = {};
-  try {
-    var ss = getSpreadsheet_();
-    var memberSheet = ss.getSheetByName(config.MEMBERS_SHEET_NAME || 'Members');
-    if (!memberSheet) {
-      return { status: 'error', message: 'No "Members" tab found in the spreadsheet. Add one with columns: Name | Phone | Email | Notes.' };
-    }
+  var nameCol = (config.MEMBERS_NAME_COLUMN || 1) - 1;
+  var phoneCol = (config.MEMBERS_PHONE_COLUMN || 2) - 1;
+  var last = memberSheet.getLastRow();
+  var width = Math.max(6, memberSheet.getLastColumn());
+  var memberRows = last >= 2 ? memberSheet.getRange(2, 1, last - 1, width).getValues() : [];
 
-    var memberData = memberSheet.getDataRange().getValues();
-    var nameCol = (config.MEMBERS_NAME_COLUMN || 1) - 1;    // Convert to 0-based
-    var phoneCol = (config.MEMBERS_PHONE_COLUMN || 2) - 1;  // Convert to 0-based
-    var filterCol = (config.MEMBERS_FILTER_COLUMN || 0) - 1; // -1 means no filter (default)
-    var filterVal = (config.MEMBERS_FILTER_VALUE || '').toLowerCase();
-
-    for (var i = 1; i < memberData.length; i++) { // Skip header row
-      // Optional purpose/type filter, only applied if configured
-      if (filterCol >= 0 && filterVal) {
-        var cellVal = String(memberData[i][filterCol] || '').trim().toLowerCase();
-        if (cellVal !== filterVal) continue;
-      }
-
-      var phone = String(memberData[i][phoneCol] || '').replace(/[\s\-()]/g, '');
-      var name = String(memberData[i][nameCol] || '').trim();
-      if (phone) {
-        memberPhones[phone] = name;
-      }
-    }
-  } catch (err) {
-    return { status: 'error', message: 'Could not read Members tab: ' + err.toString() };
-  }
-
-  var totalMembers = Object.keys(memberPhones).length;
-
-  // Read that date's registrations (same spreadsheet, already opened above)
+  // Registrations for the date, keyed by last-10-digits of phone
+  var regMap = {};
   var dateSheet = ss.getSheetByName(date);
-
-  if (!dateSheet) {
-    // No registrations for this date — all members are unregistered
-    return {
-      status: 'success',
-      date: date,
-      pending: [],
-      totalMembers: totalMembers,
-      totalRegistered: 0,
-      totalPending: 0
-    };
-  }
-
-  var regData = dateSheet.getDataRange().getValues();
-  // Columns in date tab: Timestamp(0), Name(1), Phone(2), Plates(3), CouponCode(4), Redeemed(5), RedeemedAt(6), Source(7)
-
-  // Build a map of registered members for this date
-  var registeredMap = {};
-  for (var j = 1; j < regData.length; j++) {
-    var regPhone = String(regData[j][2] || '').replace(/[\s\-()]/g, '');
-    registeredMap[regPhone] = {
-      name: regData[j][1],
-      phone: regData[j][2],
-      plates: regData[j][3],
-      couponCode: regData[j][4],
-      redeemed: regData[j][5] === 'Yes'
-    };
-  }
-
-  // Find members who registered but have NOT redeemed
-  var pendingList = [];
-  var totalRegistered = 0;
-
-  var memberPhoneKeys = Object.keys(memberPhones);
-  for (var k = 0; k < memberPhoneKeys.length; k++) {
-    var mPhone = memberPhoneKeys[k];
-    var reg = registeredMap[mPhone];
-
-    if (reg) {
-      totalRegistered++;
-      if (!reg.redeemed) {
-        pendingList.push({
-          name: reg.name || memberPhones[mPhone],
-          phone: reg.phone,
-          plates: reg.plates,
-          couponCode: reg.couponCode
-        });
-      }
+  if (dateSheet) {
+    var regRows = readDataRows_(dateSheet, 8);
+    for (var j = 0; j < regRows.length; j++) {
+      var e = rowToEntry_(regRows[j], date, j + 2);
+      var k = last10_(e.phone);
+      if (k) regMap[k] = e;
     }
   }
 
-  return {
-    status: 'success',
-    date: date,
-    pending: pendingList,
-    totalMembers: totalMembers,
-    totalRegistered: totalRegistered,
-    totalPending: pendingList.length
-  };
+  var members = [];
+  var counts = { total: 0, notRegistered: 0, pendingPickup: 0, redeemed: 0, noRemark: 0 };
+
+  for (var i = 0; i < memberRows.length; i++) {
+    var row = memberRows[i];
+    var phone = phoneToStr_(row[phoneCol]);
+    var name = cellToStr_(row[nameCol]).trim();
+    if (!phone && !name) continue;
+
+    var reg = regMap[last10_(phone)];
+    var status = !reg ? 'not_registered' : (reg.redeemed ? 'redeemed' : 'registered');
+    var remarks = cellToStr_(row[4]).trim();
+
+    counts.total++;
+    if (status === 'not_registered') counts.notRegistered++;
+    else if (status === 'registered') counts.pendingPickup++;
+    else counts.redeemed++;
+    if (!remarks) counts.noRemark++;
+
+    members.push({
+      row: i + 2,                       // row in Members tab (used to save remarks)
+      name: name || (reg ? reg.name : ''),
+      phone: phone,
+      email: cellToStr_(row[2]),
+      notes: cellToStr_(row[3]),
+      remarks: remarks,
+      remarksUpdated: cellToStr_(row[5]),
+      status: status,
+      plates: reg ? reg.plates : 0,
+      couponCode: reg ? reg.couponCode : '',
+      redeemedAt: reg ? reg.redeemedAt : ''
+    });
+  }
+
+  return { status: 'success', date: date, members: members, counts: counts };
+}
+
+/**
+ * Save a remark (e.g. "Notified", "No answer") against a member so every
+ * admin can see it. Members tab: column E = Remarks, column F = RemarksUpdated.
+ */
+function setMemberRemark(row, phone, remark) {
+  var config = getConfig();
+  var sheet = getSpreadsheet_().getSheetByName(config.MEMBERS_SHEET_NAME || 'Members');
+  if (!sheet) return { status: 'error', message: 'No "Members" tab found' };
+
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(5000); }
+  catch (e) { return { status: 'error', message: 'System busy — please try again' }; }
+
+  try {
+    var phoneCol = (config.MEMBERS_PHONE_COLUMN || 2);
+    var target = last10_(phone);
+    var r = parseInt(row, 10);
+
+    // Trust the row number only if that row still has the same phone; otherwise search.
+    var ok = r >= 2 && r <= sheet.getLastRow() && last10_(sheet.getRange(r, phoneCol).getValue()) === target;
+    if (!ok) {
+      r = 0;
+      var vals = sheet.getRange(2, phoneCol, Math.max(sheet.getLastRow() - 1, 1), 1).getValues();
+      for (var i = 0; i < vals.length; i++) {
+        if (last10_(vals[i][0]) === target) { r = i + 2; break; }
+      }
+    }
+    if (!r) return { status: 'error', message: 'Member not found in the Members tab' };
+
+    // Ensure headers exist for the two remark columns
+    if (String(sheet.getRange(1, 5).getValue()).trim() !== 'Remarks') {
+      sheet.getRange(1, 5, 1, 2).setValues([['Remarks', 'RemarksUpdated']]).setFontWeight('bold');
+    }
+    var text = String(remark || '').trim().slice(0, 300);
+    var stamp = text ? new Date().toISOString() : '';
+    sheet.getRange(r, 5, 1, 2).setNumberFormat('@').setValues([[text, stamp]]);
+
+    return { status: 'success', row: r, remarks: text, remarksUpdated: stamp };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // ============================================================

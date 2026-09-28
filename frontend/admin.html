@@ -864,6 +864,43 @@
         }
 
         .btn-call:hover { opacity: 0.9; }
+
+        /* ---- Members v2 ---- */
+        .mfilters { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 10px; }
+        .mchip { padding:6px 12px; border-radius:16px; border:1.5px solid #dcdfe6; background:#fff;
+                 font-size:12px; font-weight:600; color:#555; cursor:pointer; }
+        .mchip.active { background:#667eea; border-color:#667eea; color:#fff; }
+        .msearch { width:100%; padding:10px 12px; border:2px solid #e0e0e0; border-radius:10px; font-size:14px; outline:none; margin-bottom:4px; }
+        .msearch:focus { border-color:#667eea; }
+        .member-card { background:#fff; border-radius:12px; padding:12px 14px; margin-bottom:10px; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
+        .member-card .mc-top { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+        .member-card .member-info { flex:1; min-width:0; }
+        .member-card .member-name { font-weight:700; font-size:15px; color:#2c3e50; }
+        .member-card .member-meta { font-size:13px; color:#888; margin-top:2px; word-break:break-word; }
+        .member-card .member-actions { display:flex; gap:6px; flex-shrink:0; }
+        .mc-status { display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; margin-left:6px; vertical-align:middle; }
+        .st-not_registered { background:#fdecea; color:#c0392b; }
+        .st-registered { background:#fff4e0; color:#e65100; }
+        .st-redeemed { background:#d4edda; color:#155724; }
+        .btn-call.icon { padding:8px 11px; font-size:16px; }
+        .btn-wa { display:inline-flex; align-items:center; gap:4px; padding:8px 12px; background:#25D366; color:#fff;
+                  border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; }
+        .mc-remark-saved { margin-top:8px; padding:6px 10px; background:#f0f4ff; border-left:3px solid #667eea; border-radius:6px; font-size:13px; color:#333; }
+        .mc-remark-saved small { color:#999; margin-left:6px; }
+        .mc-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+        .mc-chips button { padding:4px 10px; border-radius:14px; border:1px solid #dcdfe6; background:#fafafa; font-size:12px; cursor:pointer; }
+        .mc-remark-edit { display:flex; gap:6px; margin-top:8px; }
+        .mc-remark-edit input { flex:1; padding:8px 10px; border:1.5px solid #e0e0e0; border-radius:8px; font-size:13px; outline:none; min-width:0; }
+        .mc-remark-edit input:focus { border-color:#667eea; }
+        .mc-remark-edit button { padding:8px 14px; background:#667eea; color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
+        .mc-remark-edit button:disabled { opacity:.6; }
+        /* Walk-in recent list */
+        .walkin-recent { margin-top:16px; }
+        .walkin-recent h3 { font-size:13px; color:#888; margin-bottom:6px; text-transform:uppercase; letter-spacing:.5px; }
+        .walkin-recent .wr-item { display:flex; justify-content:space-between; gap:8px; padding:8px 10px; background:#fff; border-radius:8px; margin-bottom:6px; font-size:13px; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+        .walkin-recent .wr-code { font-weight:700; letter-spacing:1px; color:#1a1a2e; }
+        .scope-note { font-size:12px; color:#888; margin:0 0 10px; }
+        .retry-btn { margin-top:10px; padding:8px 16px; background:#667eea; color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:600; }
     </style>
 </head>
 <body>
@@ -938,10 +975,10 @@
                 <button onclick="lookupManual()">Verify</button>
             </div>
 
-            <p style="color:#999; font-size:13px; margin: 16px 0 8px;">— or find by name / phone (today only) —</p>
+            <p style="color:#999; font-size:13px; margin: 16px 0 8px;">— or find by name / phone · <span id="scannerSearchScope">today</span> —</p>
 
             <div class="manual-entry">
-                <input type="text" id="scannerSearchInput" placeholder="Name or phone number"
+                <input type="text" id="scannerSearchInput" placeholder="Name or phone (any digits, e.g. last 4)"
                        style="text-transform:none; letter-spacing:normal;"
                        onkeypress="if(event.key==='Enter') scannerSearch()">
                 <button onclick="scannerSearch()">Find</button>
@@ -970,6 +1007,7 @@
                    onkeypress="if(event.key==='Enter') searchEntries()">
             <button onclick="searchEntries()">Search</button>
         </div>
+        <div class="scope-note" id="searchScope"></div>
         <div id="searchResults">
             <div class="no-results">Search by name, phone number, or coupon code</div>
         </div>
@@ -1011,6 +1049,11 @@
                     No QR needed — coupon issued &amp; redeemed on the spot.
                 </div>
             </div>
+
+            <div class="walkin-recent" id="walkinRecent" style="display:none;">
+                <h3>Recently added (this session)</h3>
+                <div id="walkinRecentList"></div>
+            </div>
         </div>
     </div>
 
@@ -1024,7 +1067,7 @@
     <!-- DATES MANAGEMENT TAB -->
     <div class="tab-content" id="tab-dates">
         <p style="font-size:14px; color:#555; margin-bottom:14px;">
-            Toggle dates to enable or disable registration. Set max token limits per date. Past dates are auto-disabled.
+            Toggle dates to enable or disable registration. Set max coupons per date (0 = unlimited). Past dates are auto-disabled.
         </p>
         <div id="dateToggles">
             <div class="no-results">Loading date settings...</div>
@@ -1044,12 +1087,14 @@
 
     <!-- MEMBERS TAB -->
     <div class="tab-content" id="tab-members">
-        <h2 style="font-size:18px; color:#2c3e50; margin-bottom:4px;">👥 Registered but Not Redeemed</h2>
+        <h2 style="font-size:18px; color:#2c3e50; margin-bottom:8px;">👥 Members</h2>
         <div class="members-header" id="membersHeader">
             <p style="color:#666; font-size:14px;">Loading member data...</p>
         </div>
-        <div style="text-align:center; margin-bottom:12px;">
-            <button onclick="loadMembersStatus()" style="padding:8px 18px; background:#667eea; color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer;">🔄 Refresh</button>
+        <input type="search" class="msearch" id="membersSearch" placeholder="Search member by name or phone..." oninput="onMembersSearch(this.value)">
+        <div class="mfilters" id="membersFilters"></div>
+        <div style="text-align:right; margin-bottom:8px;">
+            <button onclick="loadMembersStatus()" style="padding:6px 14px; background:#667eea; color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">🔄 Refresh</button>
         </div>
         <div class="members-list" id="membersList"></div>
     </div>
@@ -1067,7 +1112,7 @@
     // ============================================================
     var jsonpCounter = 0;
 
-    function jsonpRequest(params, onSuccess, onError) {
+    function jsonpRequest(params, onSuccess, onError, timeoutMs) {
         var callbackName = 'jsonpCb_' + (++jsonpCounter) + '_' + Date.now();
         params.callback = callbackName;
 
@@ -1078,7 +1123,7 @@
         var timeout = setTimeout(function() {
             cleanup();
             if (onError) onError(new Error('Request timed out'));
-        }, 15000);
+        }, timeoutMs || 30000);
 
         function cleanup() {
             clearTimeout(timeout);
@@ -1104,6 +1149,10 @@
     // ============================================================
     var allData = [];
     var currentScanCode = null;
+    var currentScanDate = null;
+    var dataLoaded = false;
+    var refreshSeq = 0;
+    var summaryCache = {};
     var html5QrCode = null;
     var isScanning = false;
 
@@ -1142,17 +1191,45 @@
             var d = new Date(dateStr + 'T00:00:00');
             var option = document.createElement('option');
             option.value = dateStr;
-            option.textContent = d.toLocaleDateString('en-US', {
+            option.textContent = getDayLabel(dateStr) + ' — ' + d.toLocaleDateString('en-US', {
                 weekday: 'short', month: 'short', day: 'numeric'
             });
             select.appendChild(option);
         });
 
-        // Default to today if today is an event date
+        // Default to a SINGLE day (never "All Dates" on load):
+        // today if it's an event day, else the next upcoming event day, else the last one.
         var todayStr = getTodayStr();
-        if (CONFIG.EVENT_DATES.indexOf(todayStr) !== -1) {
-            select.value = todayStr;
-        }
+        var pick = CONFIG.EVENT_DATES.filter(function(x) { return x >= todayStr; })[0] ||
+                   CONFIG.EVENT_DATES[CONFIG.EVENT_DATES.length - 1];
+        if (pick) select.value = pick;
+    }
+
+    // "Day 2 Maha Saptami" for a date (empty string if not an event date)
+    function getDayLabel(dateStr) {
+        var i = CONFIG.EVENT_DATES.indexOf(dateStr);
+        if (i < 0) return '';
+        var label = (CONFIG.EVENT_DAY_LABELS || [])[i];
+        return 'Day ' + (i + 1) + (label ? ' ' + label : '');
+    }
+
+    // The date the Search / Scanner-search / Members tabs work on:
+    // the selected date in the filter, or today when the filter is "All Dates".
+    function getFocusDate() {
+        var v = document.getElementById('dateFilter').value;
+        return (v && v !== 'all') ? v : getTodayStr();
+    }
+
+    function updateScopeLabels() {
+        var v = document.getElementById('dateFilter').value;
+        var f = getFocusDate();
+        var lbl = getDayLabel(f) || f;
+        var sc = document.getElementById('scannerSearchScope');
+        if (sc) sc.textContent = (f === getTodayStr() ? 'today' : lbl);
+        var ss = document.getElementById('searchScope');
+        if (ss) ss.textContent = (v === 'all')
+            ? 'Searching ALL dates (every day loaded). Pick a day in the filter above to narrow it.'
+            : 'Searching ' + lbl + ' only. Choose "All Dates" in the filter above to search every day.';
     }
 
     function getTodayStr() {
@@ -1185,6 +1262,7 @@
             if (btn) btn.classList.add('active');
         }
         document.getElementById('tab-' + tabName).classList.add('active');
+        updateScopeLabels();
 
         // Tab-specific actions
         if (tabName === 'dates') {
@@ -1209,22 +1287,51 @@
     // ============================================================
     // Data fetching
     // ============================================================
-    function refreshData() {
+    function refreshData(silent) {
         var dateFilter = document.getElementById('dateFilter').value;
+        var seq = ++refreshSeq;
+        var box = document.getElementById('allEntries');
+        updateScopeLabels();
+
+        if (silent !== true) {
+            dataLoaded = false;
+            box.innerHTML = '<div class="no-results">Loading entries...</div>';
+        }
+
+        function fail(msg) {
+            if (seq !== refreshSeq) return;
+            if (silent === true) return;
+            box.innerHTML = '<div class="no-results">⚠️ ' + escHtml(msg) +
+                '<br><button class="retry-btn" onclick="refreshData()">🔄 Retry</button></div>';
+        }
 
         jsonpRequest(
             { action: 'list', date: dateFilter },
             function(result) {
-                if (result.status === 'success') {
+                if (seq !== refreshSeq) return;   // a newer request superseded this one
+                if (result && result.status === 'success') {
                     allData = result.data || [];
+                    dataLoaded = true;
                     updateStats();
                     renderAllEntries();
+                } else {
+                    fail('Could not load entries: ' + ((result && result.message) || 'Unknown error'));
                 }
             },
             function(err) {
                 console.error('Refresh error:', err);
-            }
+                fail('Could not load entries (' + ((err && err.message) || 'connection problem') + ').');
+            },
+            45000
         );
+
+        // Keep the currently open data tab in step with the date filter
+        if (silent !== true) {
+            var active = document.querySelector('.tab-btn.active');
+            var tab = active && active.getAttribute('data-tab');
+            if (tab === 'summary') loadSummary();
+            if (tab === 'members') loadMembersStatus();
+        }
     }
 
     function updateStats() {
@@ -1319,22 +1426,25 @@
         var query = document.getElementById('scannerSearchInput').value.trim();
         var resultsDiv = document.getElementById('scannerSearchResults');
         var includeRedeemed = document.getElementById('scannerSearchIncludeRedeemed').checked;
+        var searchDate = getFocusDate();
+        updateScopeLabels();
 
         if (!query) {
             resultsDiv.innerHTML = '';
             return;
         }
 
-        resultsDiv.innerHTML = '<div style="color:#999; font-size:13px; text-align:center; padding:8px;">Searching today\'s entries...</div>';
+        resultsDiv.innerHTML = '<div style="color:#999; font-size:13px; text-align:center; padding:8px;">Searching ' +
+            escHtml(getDayLabel(searchDate) || searchDate) + '...</div>';
 
         // Debounce so we don't fire a request per keystroke
         if (scannerSearchTimer) clearTimeout(scannerSearchTimer);
         scannerSearchTimer = setTimeout(function() {
             jsonpRequest(
-                { action: 'quickSearch', query: query, date: getTodayStr(), includeRedeemed: String(includeRedeemed) },
+                { action: 'quickSearch', query: query, date: searchDate, includeRedeemed: String(includeRedeemed) },
                 function(result) {
                     if (result.status === 'success') {
-                        renderScannerSearchResults(result.data || []);
+                        renderScannerSearchResults(result.data || [], searchDate);
                     } else {
                         resultsDiv.innerHTML = '<div class="no-results">' + escHtml(result.message || 'Search failed') + '</div>';
                     }
@@ -1346,11 +1456,12 @@
         }, 300);
     }
 
-    function renderScannerSearchResults(results) {
+    function renderScannerSearchResults(results, searchDate) {
         var resultsDiv = document.getElementById('scannerSearchResults');
 
         if (results.length === 0) {
-            resultsDiv.innerHTML = '<div class="no-results" style="padding:16px;">No matches for today</div>';
+            resultsDiv.innerHTML = '<div class="no-results" style="padding:16px;">No matches on ' +
+                escHtml(getDayLabel(searchDate) || searchDate) + '</div>';
             return;
         }
 
@@ -1365,7 +1476,7 @@
                 '<span class="code">' + escHtml(d.couponCode) + '</span>' +
                 '<div class="actions">' +
                     '<button class="btn-small-redeem' + (d.redeemed ? ' redeemed' : '') + '" ' +
-                        'onclick="lookupCode(\'' + escAttr(d.couponCode) + '\')">' +
+                        'onclick="lookupCode(\'' + escAttr(d.couponCode) + '\', \'' + escAttr(d.date || searchDate) + '\')">' +
                         (d.redeemed ? 'View' : 'Select') +
                     '</button>' +
                 '</div>' +
@@ -1377,8 +1488,9 @@
     // ============================================================
     // Coupon lookup
     // ============================================================
-    function lookupCode(code) {
+    function lookupCode(code, dateHint) {
         currentScanCode = code;
+        currentScanDate = dateHint || getTodayStr();
         var resultDiv = document.getElementById('scanResult');
         var headerDiv = document.getElementById('resultHeader');
         var detailsDiv = document.getElementById('resultDetails');
@@ -1392,7 +1504,7 @@
         // Pass today as a date hint — backend searches today's tab first (faster).
         // If not found there, it falls back to all other tabs automatically.
         jsonpRequest(
-            { action: 'lookup', code: code, date: getTodayStr() },
+            { action: 'lookup', code: code, date: currentScanDate },
             function(result) {
                 if (result.status === 'found') {
                     if (result.redeemed) {
@@ -1447,7 +1559,7 @@
         redeemBtn.textContent = '⏳ Redeeming...';
 
         jsonpRequest(
-            { action: 'redeem', code: currentScanCode, date: getTodayStr() },
+            { action: 'redeem', code: currentScanCode, date: currentScanDate || getTodayStr() },
             function(result) {
                 if (result.status === 'success') {
                     var resultDiv = document.getElementById('scanResult');
@@ -1458,7 +1570,7 @@
                     redeemBtn.disabled = true;
 
                     if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-                    refreshData();
+                    refreshData(true);
                 } else {
                     alert('Redeem failed: ' + (result.message || 'Unknown error'));
                     redeemBtn.disabled = false;
@@ -1478,13 +1590,26 @@
     // Search
     // ============================================================
     function searchEntries() {
-        var query = document.getElementById('searchInput').value.trim().toLowerCase();
-        if (!query) return;
+        var raw = document.getElementById('searchInput').value.trim();
+        var q = raw.toLowerCase();
+        if (!q) return;
+        updateScopeLabels();
 
+        if (!dataLoaded) {
+            document.getElementById('searchResults').innerHTML =
+                '<div class="no-results">Entries are still loading — try again in a moment.</div>';
+            return;
+        }
+
+        var qDigits = q.replace(/\D/g, '');
         var results = allData.filter(function(d) {
-            return d.name.toLowerCase().indexOf(query) !== -1 ||
-                   d.phone.indexOf(query) !== -1 ||
-                   d.couponCode.toLowerCase().indexOf(query) !== -1;
+            // Values can arrive as numbers (phones) — always coerce to string first
+            var name = String(d.name == null ? '' : d.name).toLowerCase();
+            var code = String(d.couponCode == null ? '' : d.couponCode).toLowerCase();
+            var phone = String(d.phone == null ? '' : d.phone);
+            if (name.indexOf(q) !== -1 || code.indexOf(q) !== -1 || phone.toLowerCase().indexOf(q) !== -1) return true;
+            // digits-only phone match: "98765 43210", "+91-98765…", or just the last 4 digits
+            return qDigits.length >= 3 && phone.replace(/\D/g, '').indexOf(qDigits) !== -1;
         });
 
         renderSearchResults(results);
@@ -1503,13 +1628,14 @@
             html += '<div class="search-result-item">' +
                 '<div class="info">' +
                     '<div class="name">' + escHtml(d.name) + '</div>' +
-                    '<div class="meta">' + escHtml(d.phone) + ' · ' + escHtml(d.date) + ' · ' + escHtml(String(d.plates)) + ' plate(s)</div>' +
+                    '<div class="meta">' + escHtml(d.phone) + ' <a href="tel:' + escAttr(d.phone) + '" title="Call" style="text-decoration:none;">📞</a>' +
+                        ' · ' + escHtml(getDayLabel(d.date) || d.date) + ' · ' + escHtml(String(d.plates)) + ' plate(s)</div>' +
                 '</div>' +
                 '<div class="code">' + escHtml(d.couponCode) + '</div>' +
                 '<div class="actions">' +
                     (d.redeemed
                         ? '<button class="btn-small-redeem redeemed">✅ Done</button>'
-                        : '<button class="btn-small-redeem" onclick="redeemFromList(\'' + escAttr(d.couponCode) + '\', this)">Redeem</button>'
+                        : '<button class="btn-small-redeem" onclick="redeemFromList(\'' + escAttr(d.couponCode) + '\', this, \'' + escAttr(d.date) + '\')">Redeem</button>'
                     ) +
                 '</div>' +
             '</div>';
@@ -1538,14 +1664,14 @@
                         escHtml(d.phone) +
                         ' <a href="tel:' + escAttr(d.phone) + '" title="Call" style="text-decoration:none;">📞</a>' +
                         ' <span onclick="copyPhone(\'' + escAttr(d.phone) + '\', this)" title="Copy" style="cursor:pointer;">📋</span>' +
-                        ' · ' + escHtml(d.date) + ' · ' + escHtml(String(d.plates)) + ' plate(s)' +
+                        ' · ' + escHtml(getDayLabel(d.date) || d.date) + ' · ' + escHtml(String(d.plates)) + ' plate(s)' +
                     '</div>' +
                 '</div>' +
                 '<div class="code">' + escHtml(d.couponCode) + '</div>' +
                 '<div class="actions">' +
                     (d.redeemed
                         ? '<button class="btn-small-redeem redeemed">✅ Done</button>'
-                        : '<button class="btn-small-redeem" onclick="redeemFromList(\'' + escAttr(d.couponCode) + '\', this)">Redeem</button>'
+                        : '<button class="btn-small-redeem" onclick="redeemFromList(\'' + escAttr(d.couponCode) + '\', this, \'' + escAttr(d.date) + '\')">Redeem</button>'
                     ) +
                 '</div>' +
             '</div>';
@@ -1578,12 +1704,12 @@
     // ============================================================
     // Redeem from list/search
     // ============================================================
-    function redeemFromList(code, btn) {
+    function redeemFromList(code, btn, date) {
         btn.disabled = true;
         btn.textContent = '⏳...';
 
         jsonpRequest(
-            { action: 'redeem', code: code, date: getTodayStr() },
+            { action: 'redeem', code: code, date: date || getTodayStr() },
             function(result) {
                 if (result.status === 'success') {
                     btn.textContent = '✅ Done';
@@ -1629,43 +1755,34 @@
         var today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        // Build a map from backend dates
         var dateMap = {};
-        dates.forEach(function(d) {
-            dateMap[d.date] = d;
-        });
+        dates.forEach(function(d) { dateMap[d.date] = d; });
 
         CONFIG.EVENT_DATES.forEach(function(dateStr, index) {
             var d = new Date(dateStr + 'T00:00:00');
             var isPast = d < today;
             var backendData = dateMap[dateStr] || {};
             var isEnabled = backendData.enabled !== undefined ? backendData.enabled : true;
-            var maxTokens = backendData.maxTokens !== undefined ? backendData.maxTokens : 300;
+            var maxTokens = backendData.maxTokens !== undefined ? backendData.maxTokens : 0;   // 0 = unlimited
             var issuedCount = backendData.issuedCount || 0;
-            var isFull = backendData.isFull || (issuedCount >= maxTokens);
+            // "Full" only makes sense when a limit is actually set (max 0 = unlimited)
+            var isFull = maxTokens > 0 && issuedCount >= maxTokens;
 
             var dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
             var dateFormatted = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            var festival = (CONFIG.EVENT_DAY_LABELS || [])[index] || '';
 
-            var statusText = '';
-            var statusClass = '';
-            if (isPast) {
-                statusText = 'Past';
-                statusClass = 'past';
-            } else if (isEnabled) {
-                statusText = 'Open';
-                statusClass = 'open';
-            } else {
-                statusText = 'Closed';
-                statusClass = 'closed';
-            }
+            var statusText, statusClass;
+            if (isPast) { statusText = 'Past'; statusClass = 'past'; }
+            else if (isEnabled) { statusText = 'Open'; statusClass = 'open'; }
+            else { statusText = 'Closed'; statusClass = 'closed'; }
 
             var row = document.createElement('div');
             row.className = 'date-toggle-row';
 
             row.innerHTML =
                 '<div class="date-info">' +
-                    '<div class="date-day">Day ' + (index + 1) + ' — ' + dayName + '</div>' +
+                    '<div class="date-day">Day ' + (index + 1) + (festival ? ' ' + escHtml(festival) : '') + ' — ' + dayName + '</div>' +
                     '<div class="date-full">' + dateFormatted + '</div>' +
                     (isPast ? '<div class="date-past">Auto-closed (past date)</div>' : '') +
                 '</div>' +
@@ -1673,10 +1790,11 @@
                     '<div class="token-limit-group">' +
                         '<label>Max:</label>' +
                         '<input type="number" id="maxTokens_' + index + '" value="' + maxTokens + '" min="0" ' +
+                            'title="0 = unlimited" ' +
                             (isPast ? 'disabled' : '') +
                             ' onchange="handleMaxTokensChange(\'' + dateStr + '\', this.value, ' + index + ')">' +
                     '</div>' +
-                    '<span class="issued-count" id="issuedCount_' + index + '">' + issuedCount + ' / ' + maxTokens + '</span>' +
+                    '<span class="issued-count" id="issuedCount_' + index + '">' + issuedCount + ' / ' + (maxTokens > 0 ? maxTokens : '∞') + '</span>' +
                     (isFull ? '<span class="badge-full">Full</span>' : '') +
                     '<span class="toggle-status ' + statusClass + '" id="toggleStatus_' + index + '">' + statusText + '</span>' +
                     '<label class="toggle-switch">' +
@@ -1724,7 +1842,7 @@
     function handleMaxTokensChange(dateStr, value, index) {
         var maxTokens = parseInt(value, 10);
         if (isNaN(maxTokens) || maxTokens < 0) {
-            alert('Please enter a valid number');
+            alert('Please enter a valid number (0 = unlimited)');
             return;
         }
 
@@ -1732,19 +1850,14 @@
             { action: 'setDateLimit', date: dateStr, maxTokens: String(maxTokens) },
             function(result) {
                 if (result.status === 'success') {
-                    // Update the issued/max display
-                    var issuedEl = document.getElementById('issuedCount_' + index);
-                    if (issuedEl) {
-                        var currentText = issuedEl.textContent;
-                        var issuedNum = parseInt(currentText.split('/')[0].trim(), 10) || 0;
-                        issuedEl.textContent = issuedNum + ' / ' + maxTokens;
-                    }
+                    // Reload from the server so Max / issued / Full badge all reflect what was really saved
+                    loadDateSettings();
                 } else {
-                    alert('Failed to update token limit: ' + (result.message || 'Unknown error'));
+                    alert('Failed to update limit: ' + (result.message || 'Unknown error'));
                 }
             },
             function() {
-                alert('Connection error. Could not update token limit.');
+                alert('Connection error. Could not update limit.');
             }
         );
     }
@@ -1756,7 +1869,9 @@
 
     function initWalkinTab() {
         // Set today's date label
-        document.getElementById('walkinDateLabel').textContent = '📅 ' + getTodayFormatted();
+        document.getElementById('walkinDateLabel').textContent = '📅 ' + getTodayFormatted() +
+            (getDayLabel(getTodayStr()) ? '  ·  ' + getDayLabel(getTodayStr()) : '');
+        loadRecentWalkins();
 
         // Set max plates from config
         var maxPlatesSpan = document.getElementById('walkinMaxPlates');
@@ -1811,6 +1926,59 @@
         });
     }
 
+    // ---- Recently-added walk-ins (client-side, this browser session) ----
+    var recentWalkins = [];
+    var RECENT_KEY = 'agomoni_recent_walkins';
+
+    function loadRecentWalkins() {
+        try { recentWalkins = JSON.parse(sessionStorage.getItem(RECENT_KEY) || '[]'); } catch (e) { recentWalkins = []; }
+        var today = getTodayStr();
+        recentWalkins = recentWalkins.filter(function(w) { return w.date === today; });
+        renderRecentWalkins();
+    }
+    function saveRecentWalkins() {
+        try { sessionStorage.setItem(RECENT_KEY, JSON.stringify(recentWalkins)); } catch (e) { /* storage unavailable — fine */ }
+    }
+    function phoneKey(p) { var d = String(p || '').replace(/\D/g, ''); return d.length > 10 ? d.slice(-10) : d; }
+    function findRecentWalkin(phone) {
+        var k = phoneKey(phone), cutoff = Date.now() - 10 * 60 * 1000;
+        for (var i = 0; i < recentWalkins.length; i++) {
+            if (phoneKey(recentWalkins[i].phone) === k && recentWalkins[i].ts > cutoff) return recentWalkins[i];
+        }
+        return null;
+    }
+    function rememberWalkin(name, phone, plates, result) {
+        var k = phoneKey(phone);
+        recentWalkins = recentWalkins.filter(function(w) { return phoneKey(w.phone) !== k; });
+        recentWalkins.unshift({ name: name, phone: phone, plates: plates, code: result.couponCode, date: result.date || getTodayStr(), ts: Date.now() });
+        recentWalkins = recentWalkins.slice(0, 8);
+        saveRecentWalkins();
+        renderRecentWalkins();
+    }
+    function renderRecentWalkins() {
+        var wrap = document.getElementById('walkinRecent');
+        var list = document.getElementById('walkinRecentList');
+        if (!wrap || !list) return;
+        wrap.style.display = recentWalkins.length ? 'block' : 'none';
+        list.innerHTML = recentWalkins.map(function(w) {
+            return '<div class="wr-item"><span>' + escHtml(w.name) + ' · ' + escHtml(w.phone) + ' · ' + escHtml(String(w.plates)) + ' plate(s)</span>' +
+                   '<span class="wr-code">' + escHtml(w.code) + '</span></div>';
+        }).join('');
+    }
+    function applyWalkinLocally(result, name, phone, plates) {
+        var f = document.getElementById('dateFilter').value;
+        if (f !== 'all' && f !== result.date) return;
+        var now = result.timestamp || new Date().toISOString();
+        var e = allData.filter(function(x) { return x.couponCode === result.couponCode; })[0];
+        if (e) { e.plates = plates; e.redeemed = true; e.redeemedAt = now; }
+        else allData.push({ timestamp: now, name: name, phone: phone, date: result.date, plates: plates,
+                            couponCode: result.couponCode, redeemed: true, redeemedAt: now, source: 'Walk-in' });
+        updateStats();
+        renderAllEntries();
+        delete summaryCache[f];
+        delete summaryCache['all'];
+    }
+
     function submitWalkin(e) {
         e.preventDefault();
 
@@ -1833,6 +2001,13 @@
         if (isNaN(plates) || plates < 1 || plates > CONFIG.MAX_PLATES || plates !== Math.floor(plates)) {
             alert('Please enter a valid number of coupons (1-' + CONFIG.MAX_PLATES + ')');
             platesInput.focus();
+            return;
+        }
+
+        // Recently-added cache: catch an accidental double-entry BEFORE hitting the server
+        var dup = findRecentWalkin(phone);
+        if (dup && !confirm(dup.name + ' (' + dup.phone + ') was already added a moment ago as ' + dup.code +
+                ' with ' + dup.plates + ' plate(s).\n\nUpdate it to ' + plates + ' plate(s)?')) {
             return;
         }
 
@@ -1866,8 +2041,9 @@
                         successDiv.classList.remove('show');
                     }, 3000);
 
-                    // Refresh data in background
-                    refreshData();
+                    // Remember it + patch the local list (no full reload per walk-in)
+                    rememberWalkin(name, phone, plates, result);
+                    applyWalkinLocally(result, name, phone, plates);
                 } else {
                     alert('Walk-in failed: ' + (result.message || 'Unknown error'));
                 }
@@ -1885,23 +2061,37 @@
     // Summary / Dashboard
     // ============================================================
     function loadSummary() {
+        var scope = document.getElementById('dateFilter').value || 'all';
         var contentDiv = document.getElementById('summaryContent');
-        contentDiv.innerHTML = '<div class="summary-loading">Loading summary data...</div>';
+
+        // Stale-while-revalidate: show the last result instantly, refresh underneath
+        if (summaryCache[scope]) {
+            renderSummary(summaryCache[scope]);
+            contentDiv.insertAdjacentHTML('afterbegin', '<div class="scope-note" id="summaryRefreshing">🔄 Refreshing…</div>');
+        } else {
+            contentDiv.innerHTML = '<div class="summary-loading">Loading summary data...</div>';
+        }
 
         jsonpRequest(
-            { action: 'summary' },
+            { action: 'summary', date: scope },
             function(result) {
                 if (result.status === 'success') {
-                    renderSummary(result);
-                } else {
+                    summaryCache[scope] = result;
+                    if ((document.getElementById('dateFilter').value || 'all') === scope) renderSummary(result);
+                } else if (!summaryCache[scope]) {
                     contentDiv.innerHTML = '<div class="no-results">Could not load summary: ' +
-                        escHtml(result.message || 'Unknown error') + '</div>';
+                        escHtml(result.message || 'Unknown error') +
+                        '<br><button class="retry-btn" onclick="loadSummary()">🔄 Retry</button></div>';
                 }
             },
             function(err) {
                 console.error('Summary error:', err);
-                contentDiv.innerHTML = '<div class="no-results">Connection error loading summary</div>';
-            }
+                var r = document.getElementById('summaryRefreshing');
+                if (r) r.textContent = '⚠️ Could not refresh — showing last loaded data';
+                else contentDiv.innerHTML = '<div class="no-results">Could not load summary (slow connection).' +
+                    '<br><button class="retry-btn" onclick="loadSummary()">🔄 Retry</button></div>';
+            },
+            45000
         );
     }
 
@@ -1923,16 +2113,21 @@
         var html = '';
 
         // Today's snapshot cards
-        html += '<h3 style="font-size:16px; color:#555; margin-bottom:12px;">Today\'s Snapshot</h3>';
+        var focusLabel = data.isToday ? 'Today\'s Snapshot' : ('Snapshot — ' + escHtml(getDayLabel(data.focusDate) || data.focusDate));
+        html += '<h3 style="font-size:16px; color:#555; margin-bottom:6px;">' + focusLabel + '</h3>';
+        html += '<div class="scope-note">' + (data.scope === 'all'
+            ? 'Showing all days.'
+            : 'Showing one day (fast). Pick "All Dates" in the filter above for the full breakdown.') + '</div>';
         html += '<div class="summary-cards">';
         html += summaryCardHtml('sc-blue', today.registered || 0, 'Registered (Online)');
         html += summaryCardHtml('sc-purple', today.walkins || 0, 'Walk-ins');
         html += summaryCardHtml('sc-teal', today.totalCoupons || 0, 'Total Coupons');
         html += summaryCardHtml('sc-green', today.redeemed || 0, 'Redeemed');
         html += summaryCardHtml('sc-orange', today.pending || 0, 'Pending');
+        var hasLimit = today.maxTokens > 0;
         html += summaryCardHtml('sc-red',
-            (today.maxTokens !== undefined ? ((today.remaining !== undefined ? today.remaining : (today.maxTokens - (today.totalCoupons || 0)))) : '—'),
-            'Remaining' + (today.maxTokens !== undefined ? ' / ' + today.maxTokens + ' Max' : '')
+            hasLimit ? (today.remaining !== undefined ? today.remaining : Math.max(0, today.maxTokens - (today.totalCoupons || 0))) : '∞',
+            hasLimit ? 'Remaining / ' + today.maxTokens + ' Max' : 'No limit set'
         );
         html += '</div>';
 
@@ -1952,14 +2147,14 @@
             var dateLabel = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
             html += '<tr>' +
-                '<td>Day ' + (idx + 1) + ' (' + dayLabel + ')</td>' +
+                '<td>' + escHtml(getDayLabel(day.date) || ('Day ' + (idx + 1))) + ' (' + dayLabel + ')</td>' +
                 '<td>' + dateLabel + '</td>' +
                 '<td>' + (day.registered || 0) + '</td>' +
                 '<td>' + (day.walkins || 0) + '</td>' +
                 '<td>' + (day.totalCoupons || 0) + '</td>' +
                 '<td>' + (day.redeemed || 0) + '</td>' +
                 '<td>' + (day.pending || 0) + '</td>' +
-                '<td>' + (day.maxTokens !== undefined ? day.maxTokens : '—') + '</td>' +
+                '<td>' + (day.maxTokens > 0 ? day.maxTokens : '∞') + '</td>' +
                 '</tr>';
         });
 
@@ -1996,69 +2191,203 @@
     // ============================================================
     function escHtml(str) {
         var div = document.createElement('div');
-        div.appendChild(document.createTextNode(str));
+        div.appendChild(document.createTextNode(str == null ? '' : String(str)));
         return div.innerHTML;
     }
 
     function escAttr(str) {
-        return str.replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+        return String(str == null ? '' : str).replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
     }
 
     // ============================================================
     // Members — pending pickup for today
     // ============================================================
+    var membersData = null;
+    var membersFilter = 'all';
+    var membersQuery = '';
+    var MEMBER_CHIPS = ['✅ Notified', '📵 No answer', '👍 Coming', '🚫 Not coming'];
+
     function loadMembersStatus() {
         var headerEl = document.getElementById('membersHeader');
         var listEl = document.getElementById('membersList');
         headerEl.innerHTML = '<p style="color:#666; font-size:14px;">Loading member data...</p>';
         listEl.innerHTML = '';
+        document.getElementById('membersFilters').innerHTML = '';
 
         jsonpRequest(
-            { action: 'getMembersStatus', date: getTodayStr() },
+            { action: 'getMembersStatus', date: getFocusDate() },
             function(result) {
                 if (result.status === 'success') {
-                    renderMembers(result);
+                    membersData = result;
+                    renderMembers();
                 } else {
                     headerEl.innerHTML = '<p style="color:#e74c3c; font-size:14px;">⚠️ ' + escHtml(result.message || 'Could not load members') + '</p>';
                 }
             },
             function() {
                 headerEl.innerHTML = '<p style="color:#e74c3c; font-size:14px;">⚠️ Connection error. Could not load members data.</p>';
-            }
+            },
+            45000
         );
     }
 
-    function renderMembers(data) {
+    function computeMemberCounts() {
+        var c = { total: 0, notRegistered: 0, pendingPickup: 0, redeemed: 0, noRemark: 0 };
+        membersData.members.forEach(function(m) {
+            c.total++;
+            if (m.status === 'not_registered') c.notRegistered++;
+            else if (m.status === 'registered') c.pendingPickup++;
+            else c.redeemed++;
+            if (!m.remarks) c.noRemark++;
+        });
+        return c;
+    }
+
+    function setMembersFilter(f) { membersFilter = f; renderMembers(); }
+    function onMembersSearch(v) { membersQuery = (v || '').trim().toLowerCase(); renderMembers(); }
+
+    function memberWaNumber(phone) {
+        var d = String(phone || '').replace(/\D/g, '');
+        var cc = String(CONFIG.DEFAULT_COUNTRY_CODE || '91').replace(/\D/g, '');
+        if (!d) return '';
+        if (d.length === 10) return cc + d;
+        if (d.length === 11 && d.charAt(0) === '0') return cc + d.slice(1);
+        return d;
+    }
+
+    function appBaseUrl() {
+        var b = CONFIG.BASE_URL || (location.origin + location.pathname.replace(/[^\/]*$/, ''));
+        return b.replace(/\/$/, '');
+    }
+
+    // Personalised WhatsApp text depending on the member's status
+    function memberMessage(m, dateStr) {
+        var first = (m.name || '').split(' ')[0] || 'there';
+        var dayTxt = (getDayLabel(dateStr) ? getDayLabel(dateStr) + ' · ' : '') +
+            new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+        if (m.status === 'registered') {
+            return 'Namaskar ' + first + ' 🙏\nYour Agomoni Durga Puja bhog coupon for ' + dayTxt + ' is confirmed: ' +
+                m.couponCode + ' (' + m.plates + ' plate(s)).\nPlease show it at the counter: ' +
+                appBaseUrl() + '/coupon.html?code=' + encodeURIComponent(m.couponCode) + '\nJoy Ma Durga! 🪷';
+        }
+        if (m.status === 'redeemed') {
+            return 'Namaskar ' + first + ' 🙏\nThank you for collecting your bhog at Agomoni Durga Puja. Joy Ma Durga! 🪷';
+        }
+        return 'Namaskar ' + first + ' 🙏\nBhog coupons for Agomoni Durga Puja (' + dayTxt + ') are open. ' +
+            'Please register here to get your coupon: ' + appBaseUrl() + '/index.html\nJoy Ma Durga! 🪷';
+    }
+
+    var STATUS_TEXT = { not_registered: 'Not registered', registered: 'Pending pickup', redeemed: 'Collected' };
+
+    function fmtRemarkTime(iso) {
+        if (!iso) return '';
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return '';
+        return d.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+    }
+
+    function renderMembers() {
+        if (!membersData) return;
         var headerEl = document.getElementById('membersHeader');
         var listEl = document.getElementById('membersList');
+        var filtersEl = document.getElementById('membersFilters');
+        var dateStr = membersData.date;
+        var c = computeMemberCounts();
 
-        var d = new Date(data.date + 'T00:00:00');
-        var dateStr = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-
+        var d = new Date(dateStr + 'T00:00:00');
         headerEl.innerHTML =
-            '<div class="members-count">' + data.totalPending + ' member(s) registered but not yet redeemed</div>' +
-            '<div class="members-subtitle">' + dateStr + '</div>';
+            '<div class="members-count">' + c.total + ' member(s)</div>' +
+            '<div class="members-subtitle">' + escHtml(getDayLabel(dateStr)) + ' · ' +
+                escHtml(d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })) +
+                ' — ' + c.pendingPickup + ' pending pickup · ' + c.redeemed + ' collected · ' + c.notRegistered + ' not registered</div>';
 
-        listEl.innerHTML = '';
+        var chips = [
+            ['all', 'All', c.total],
+            ['not_registered', 'Not registered', c.notRegistered],
+            ['registered', 'Pending pickup', c.pendingPickup],
+            ['redeemed', 'Collected', c.redeemed],
+            ['no_remark', 'No remark yet', c.noRemark]
+        ];
+        filtersEl.innerHTML = chips.map(function(ch) {
+            return '<button class="mchip' + (membersFilter === ch[0] ? ' active' : '') + '" onclick="setMembersFilter(\'' + ch[0] + '\')">' +
+                ch[1] + ' (' + ch[2] + ')</button>';
+        }).join('');
 
-        if (data.pending.length === 0) {
-            listEl.innerHTML = '<div style="text-align:center; color:#27ae60; padding:30px; font-size:15px; font-weight:600;">✅ All registered members have collected their bhog!</div>';
+        var qDigits = membersQuery.replace(/\D/g, '');
+        var rows = membersData.members.filter(function(m) {
+            if (membersFilter === 'no_remark') { if (m.remarks) return false; }
+            else if (membersFilter !== 'all' && m.status !== membersFilter) return false;
+            if (!membersQuery) return true;
+            if (String(m.name).toLowerCase().indexOf(membersQuery) !== -1) return true;
+            return qDigits.length >= 3 && String(m.phone).replace(/\D/g, '').indexOf(qDigits) !== -1;
+        });
+
+        if (rows.length === 0) {
+            listEl.innerHTML = '<div class="no-results" style="padding:24px;">No members match this view</div>';
             return;
         }
 
-        data.pending.forEach(function(m) {
-            var row = document.createElement('div');
-            row.className = 'member-row';
-            row.innerHTML =
-                '<div class="member-info">' +
-                    '<div class="member-name">' + escHtml(m.name) + '</div>' +
-                    '<div class="member-meta">' + escHtml(m.phone) + ' · ' + m.plates + ' coupon(s) · ' + escHtml(m.couponCode) + '</div>' +
+        listEl.innerHTML = rows.map(function(m) {
+            var wa = memberWaNumber(m.phone);
+            var waHref = wa ? 'https://wa.me/' + wa + '?text=' + encodeURIComponent(memberMessage(m, dateStr)) : '';
+            var meta = escHtml(m.phone || 'No phone');
+            if (m.status !== 'not_registered') meta += ' · ' + escHtml(String(m.plates)) + ' coupon(s) · ' + escHtml(m.couponCode);
+
+            return '<div class="member-card" id="mcard_' + m.row + '">' +
+                '<div class="mc-top">' +
+                    '<div class="member-info">' +
+                        '<div class="member-name">' + escHtml(m.name || '(no name)') +
+                            '<span class="mc-status st-' + m.status + '">' + STATUS_TEXT[m.status] + '</span></div>' +
+                        '<div class="member-meta">' + meta + '</div>' +
+                    '</div>' +
+                    '<div class="member-actions">' +
+                        (m.phone ? '<a class="btn-call icon" href="tel:' + escAttr(m.phone) + '" title="Call">📞</a>' : '') +
+                        (waHref ? '<a class="btn-wa" target="_blank" rel="noopener" href="' + escAttr(waHref) + '" title="WhatsApp with a personalised message">💬 WhatsApp</a>' : '') +
+                    '</div>' +
                 '</div>' +
-                '<div class="member-actions">' +
-                    '<a href="tel:' + escAttr(m.phone) + '" class="btn-call">📞 Call</a>' +
-                '</div>';
-            listEl.appendChild(row);
-        });
+                (m.remarks
+                    ? '<div class="mc-remark-saved">📝 ' + escHtml(m.remarks) +
+                        (m.remarksUpdated ? '<small>' + escHtml(fmtRemarkTime(m.remarksUpdated)) + '</small>' : '') + '</div>'
+                    : '') +
+                '<div class="mc-chips">' +
+                    MEMBER_CHIPS.map(function(t) {
+                        return '<button onclick="saveMemberRemark(' + m.row + ', \'' + escAttr(t) + '\')">' + t + '</button>';
+                    }).join('') +
+                '</div>' +
+                '<div class="mc-remark-edit">' +
+                    '<input type="text" id="mri_' + m.row + '" maxlength="300" value="' + escAttr(m.remarks) + '" placeholder="Add remark (e.g. Notified, will come Day 2)" ' +
+                        'onkeypress="if(event.key===\'Enter\') saveMemberRemark(' + m.row + ')">' +
+                    '<button id="mrb_' + m.row + '" onclick="saveMemberRemark(' + m.row + ')">Save</button>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+    }
+
+    function saveMemberRemark(row, preset) {
+        var m = membersData.members.filter(function(x) { return x.row === row; })[0];
+        if (!m) return;
+        var input = document.getElementById('mri_' + row);
+        var btn = document.getElementById('mrb_' + row);
+        var text = (preset !== undefined) ? preset : (input ? input.value : '');
+        if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+
+        jsonpRequest(
+            { action: 'setMemberRemark', row: String(row), phone: m.phone, remark: text },
+            function(result) {
+                if (result.status === 'success') {
+                    m.remarks = result.remarks;
+                    m.remarksUpdated = result.remarksUpdated;
+                    renderMembers();
+                } else {
+                    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+                    alert('Could not save remark: ' + (result.message || 'Unknown error'));
+                }
+            },
+            function() {
+                if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+                alert('Connection error. Remark was not saved.');
+            }
+        );
     }
 </script>
 

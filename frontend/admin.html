@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bhog Distribution - Admin</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍽️</text></svg>">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -975,18 +976,15 @@
                 <button onclick="lookupManual()">Verify</button>
             </div>
 
-            <p style="color:#999; font-size:13px; margin: 16px 0 8px;">— or find by name / phone · <span id="scannerSearchScope">today</span> —</p>
+            <p style="color:#999; font-size:13px; margin: 16px 0 8px;">— or search by phone (today only) —</p>
 
             <div class="manual-entry">
-                <input type="text" id="scannerSearchInput" placeholder="Name or phone (any digits, e.g. last 4)"
+                <input type="tel" id="scannerSearchInput" placeholder="Enter 10-digit phone number"
+                       inputmode="numeric" maxlength="10"
                        style="text-transform:none; letter-spacing:normal;"
+                       oninput="scannerSearchOnInput(this.value)"
                        onkeypress="if(event.key==='Enter') scannerSearch()">
-                <button onclick="scannerSearch()">Find</button>
             </div>
-            <label style="display:flex; align-items:center; gap:6px; justify-content:center; margin-top:8px; font-size:12px; color:#666;">
-                <input type="checkbox" id="scannerSearchIncludeRedeemed" onchange="scannerSearch()">
-                Include already-redeemed
-            </label>
             <div id="scannerSearchResults" style="margin-top:10px; text-align:left;"></div>
 
             <!-- Scan result -->
@@ -1045,9 +1043,6 @@
                 <div class="success-icon">✅</div>
                 <div class="success-code" id="walkinSuccessCode">—</div>
                 <div class="success-msg" id="walkinSuccessMsg">Registered &amp; Redeemed successfully</div>
-                <div style="font-size:12px; color:#155724; margin-top:6px;">
-                    No QR needed — coupon issued &amp; redeemed on the spot.
-                </div>
             </div>
 
             <div class="walkin-recent" id="walkinRecent" style="display:none;">
@@ -1386,13 +1381,13 @@
                 var url = new URL(decodedText);
                 code = url.searchParams.get('code');
             } catch(e) {
-                // If URL parsing fails, try regex extraction
                 var match = decodedText.match(/code=([A-Z0-9-]+)/);
                 if (match) code = match[1];
             }
         }
 
-        if (code && code.match(/^(BHOG|TEST)-[A-Z0-9]{4}$/)) {
+        // Accept any PREFIX-XXXX format (handles TEST- and BHOG- without hardcoding)
+        if (code && /^[A-Z]+-[A-Z0-9]{4}$/.test(code)) {
             if (isScanning) toggleScanner();
             if (navigator.vibrate) navigator.vibrate(200);
             lookupCode(code);
@@ -1419,70 +1414,101 @@
     }
 
     // ============================================================
-    // Scanner tab: quick search by name/phone (today only, for speed)
+    // Scanner tab: phone search (today only, exact 10 digits)
     // ============================================================
     var scannerSearchTimer = null;
-    function scannerSearch() {
-        var query = document.getElementById('scannerSearchInput').value.trim();
-        var resultsDiv = document.getElementById('scannerSearchResults');
-        var includeRedeemed = document.getElementById('scannerSearchIncludeRedeemed').checked;
-        var searchDate = getFocusDate();
-        updateScopeLabels();
 
-        if (!query) {
-            resultsDiv.innerHTML = '';
+    function scannerSearchOnInput(val) {
+        var digits = val.replace(/\D/g, '');
+        if (digits.length === 10) {
+            // Auto-search as soon as 10 digits are entered
+            if (scannerSearchTimer) clearTimeout(scannerSearchTimer);
+            scannerSearchTimer = setTimeout(scannerSearch, 0);
+        } else {
+            document.getElementById('scannerSearchResults').innerHTML = '';
+        }
+    }
+
+    function scannerSearch() {
+        var raw = document.getElementById('scannerSearchInput').value.trim();
+        var query = raw.replace(/\D/g, '');
+        var resultsDiv = document.getElementById('scannerSearchResults');
+
+        if (query.length !== 10) {
+            resultsDiv.innerHTML = '<div style="color:#aaa; font-size:13px; text-align:center; padding:8px;">Enter a 10-digit phone number</div>';
             return;
         }
 
-        resultsDiv.innerHTML = '<div style="color:#999; font-size:13px; text-align:center; padding:8px;">Searching ' +
-            escHtml(getDayLabel(searchDate) || searchDate) + '...</div>';
+        var searchDate = getTodayStr(); // Always search today only
 
-        // Debounce so we don't fire a request per keystroke
-        if (scannerSearchTimer) clearTimeout(scannerSearchTimer);
-        scannerSearchTimer = setTimeout(function() {
-            jsonpRequest(
-                { action: 'quickSearch', query: query, date: searchDate, includeRedeemed: String(includeRedeemed) },
-                function(result) {
-                    if (result.status === 'success') {
-                        renderScannerSearchResults(result.data || [], searchDate);
-                    } else {
-                        resultsDiv.innerHTML = '<div class="no-results">' + escHtml(result.message || 'Search failed') + '</div>';
-                    }
-                },
-                function() {
-                    resultsDiv.innerHTML = '<div class="no-results">Connection error while searching</div>';
+        resultsDiv.innerHTML = '<div style="color:#999; font-size:13px; text-align:center; padding:8px;">Searching today...</div>';
+
+        jsonpRequest(
+            { action: 'quickSearch', query: query, date: searchDate, includeRedeemed: 'true' },
+            function(result) {
+                if (result.status === 'success') {
+                    renderScannerSearchResults(result.data || [], searchDate);
+                } else {
+                    resultsDiv.innerHTML = '<div class="no-results">' + escHtml(result.message || 'Search failed') + '</div>';
                 }
-            );
-        }, 300);
+            },
+            function() {
+                resultsDiv.innerHTML = '<div class="no-results">Connection error while searching</div>';
+            }
+        );
     }
 
     function renderScannerSearchResults(results, searchDate) {
         var resultsDiv = document.getElementById('scannerSearchResults');
 
         if (results.length === 0) {
-            resultsDiv.innerHTML = '<div class="no-results" style="padding:16px;">No matches on ' +
-                escHtml(getDayLabel(searchDate) || searchDate) + '</div>';
+            resultsDiv.innerHTML = '<div class="no-results" style="padding:16px;">No registration found for today</div>';
             return;
         }
 
         var html = '';
-        results.slice(0, 15).forEach(function(d) {
+        results.slice(0, 10).forEach(function(d) {
+            var alreadyRedeemed = !!d.redeemed;
             html += '<div class="search-result-item">' +
                 '<div class="info">' +
                     '<div class="name">' + escHtml(d.name) + '</div>' +
-                    '<div class="meta">' + escHtml(d.phone) + ' · ' + escHtml(String(d.plates)) + ' plate(s)' +
-                        (d.redeemed ? ' · ✅ redeemed' : '') + '</div>' +
+                    '<div class="meta">' + escHtml(d.phone) + ' · ' + escHtml(String(d.plates)) + ' plate(s) · ' + escHtml(d.couponCode) + '</div>' +
                 '</div>' +
-                '<span class="code">' + escHtml(d.couponCode) + '</span>' +
                 '<div class="actions">' +
-                    '<button class="btn-small-redeem' + (d.redeemed ? ' redeemed' : '') + '" ' +
-                        'onclick="lookupCode(\'' + escAttr(d.couponCode) + '\', \'' + escAttr(d.date || searchDate) + '\')">' +
-                        (d.redeemed ? 'View' : 'Select') +
-                    '</button>' +
+                    (alreadyRedeemed
+                        ? '<button class="btn-small-redeem redeemed" disabled>✅ Already Redeemed</button>'
+                        : '<button class="btn-small-redeem" onclick="inlineRedeem(\'' + escAttr(d.couponCode) + '\', \'' + escAttr(d.date || searchDate) + '\', this)">✅ Mark Redeemed</button>'
+                    ) +
                 '</div>' +
             '</div>';
         });
         resultsDiv.innerHTML = html;
+    }
+
+    // Direct redeem from phone search results — no intermediate lookup step
+    function inlineRedeem(code, date, btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳ Redeeming...';
+        jsonpRequest(
+            { action: 'redeem', code: code, date: date || getTodayStr() },
+            function(result) {
+                if (result.status === 'success') {
+                    btn.textContent = '✅ Redeemed!';
+                    btn.classList.add('redeemed');
+                    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                    refreshData(true);
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = '✅ Mark Redeemed';
+                    alert('Redeem failed: ' + (result.message || 'Unknown error'));
+                }
+            },
+            function() {
+                btn.disabled = false;
+                btn.textContent = '✅ Mark Redeemed';
+                alert('Connection error. Please try again.');
+            }
+        );
     }
 
     // ============================================================
@@ -1542,7 +1568,8 @@
                 console.error('Lookup error:', err);
                 resultDiv.className = 'scan-result show result-notfound';
                 headerDiv.textContent = '⚠️ Connection Error';
-                detailsDiv.textContent = 'Could not connect to server. Check your internet and try again.';
+                detailsDiv.innerHTML = 'Could not reach the server. Check your internet and try again.' +
+                    '<br><small style="color:#aaa;">If this persists, the Apps Script deployment may need to be re-deployed as "Anyone" access.</small>';
                 redeemBtn.style.display = 'none';
             }
         );
@@ -1647,6 +1674,20 @@
     // ============================================================
     // All entries list
     // ============================================================
+    function buildWaReminderHref(d) {
+        var phoneDigits = String(d.phone || '').replace(/\D/g, '');
+        var cc = String(CONFIG.DEFAULT_COUNTRY_CODE || '91').replace(/\D/g, '');
+        var waNum = phoneDigits.length === 10 ? cc + phoneDigits : phoneDigits;
+        if (!waNum) return '';
+        var first = (d.name || '').split(' ')[0] || 'there';
+        var dayTxt = (getDayLabel(d.date) ? getDayLabel(d.date) + ' · ' : '') +
+            new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+        var couponUrl = appBaseUrl() + '/coupon.html?code=' + encodeURIComponent(d.couponCode);
+        var msg = 'Namaskar ' + first + ' 🙏\nYour Agomoni Durga Puja bhog coupon for ' + dayTxt + ' is confirmed: ' +
+            d.couponCode + ' (' + d.plates + ' plate(s)).\nPlease show it at the counter: ' + couponUrl + '\nJoy Ma Durga! 🪷';
+        return 'https://wa.me/' + waNum + '?text=' + encodeURIComponent(msg);
+    }
+
     function renderAllEntries() {
         var container = document.getElementById('allEntries');
 
@@ -1657,6 +1698,7 @@
 
         var html = '';
         allData.forEach(function(d) {
+            var waHref = buildWaReminderHref(d);
             html += '<div class="search-result-item">' +
                 '<div class="info">' +
                     '<div class="name">' + escHtml(d.name) + '</div>' +
@@ -1664,6 +1706,7 @@
                         escHtml(d.phone) +
                         ' <a href="tel:' + escAttr(d.phone) + '" title="Call" style="text-decoration:none;">📞</a>' +
                         ' <span onclick="copyPhone(\'' + escAttr(d.phone) + '\', this)" title="Copy" style="cursor:pointer;">📋</span>' +
+                        (waHref && !d.redeemed ? ' <a href="' + escAttr(waHref) + '" target="_blank" rel="noopener" title="Send WhatsApp reminder" style="text-decoration:none;">💬</a>' : '') +
                         ' · ' + escHtml(getDayLabel(d.date) || d.date) + ' · ' + escHtml(String(d.plates)) + ' plate(s)' +
                     '</div>' +
                 '</div>' +
@@ -2260,21 +2303,10 @@
         return b.replace(/\/$/, '');
     }
 
-    // Personalised WhatsApp text depending on the member's status
-    function memberMessage(m, dateStr) {
-        var first = (m.name || '').split(' ')[0] || 'there';
-        var dayTxt = (getDayLabel(dateStr) ? getDayLabel(dateStr) + ' · ' : '') +
-            new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-        if (m.status === 'registered') {
-            return 'Namaskar ' + first + ' 🙏\nYour Agomoni Durga Puja bhog coupon for ' + dayTxt + ' is confirmed: ' +
-                m.couponCode + ' (' + m.plates + ' plate(s)).\nPlease show it at the counter: ' +
-                appBaseUrl() + '/coupon.html?code=' + encodeURIComponent(m.couponCode) + '\nJoy Ma Durga! 🪷';
-        }
-        if (m.status === 'redeemed') {
-            return 'Namaskar ' + first + ' 🙏\nThank you for collecting your bhog at Agomoni Durga Puja. Joy Ma Durga! 🪷';
-        }
-        return 'Namaskar ' + first + ' 🙏\nBhog coupons for Agomoni Durga Puja (' + dayTxt + ') are open. ' +
-            'Please register here to get your coupon: ' + appBaseUrl() + '/index.html\nJoy Ma Durga! 🪷';
+    // Members tab: WhatsApp opens chat only — no predefined text
+    function memberWaHref(phone) {
+        var wa = memberWaNumber(phone);
+        return wa ? 'https://wa.me/' + wa : '';
     }
 
     var STATUS_TEXT = { not_registered: 'Not registered', registered: 'Pending pickup', redeemed: 'Collected' };
@@ -2328,8 +2360,7 @@
         }
 
         listEl.innerHTML = rows.map(function(m) {
-            var wa = memberWaNumber(m.phone);
-            var waHref = wa ? 'https://wa.me/' + wa + '?text=' + encodeURIComponent(memberMessage(m, dateStr)) : '';
+            var waHref = memberWaHref(m.phone);
             var meta = escHtml(m.phone || 'No phone');
             if (m.status !== 'not_registered') meta += ' · ' + escHtml(String(m.plates)) + ' coupon(s) · ' + escHtml(m.couponCode);
 
@@ -2342,7 +2373,7 @@
                     '</div>' +
                     '<div class="member-actions">' +
                         (m.phone ? '<a class="btn-call icon" href="tel:' + escAttr(m.phone) + '" title="Call">📞</a>' : '') +
-                        (waHref ? '<a class="btn-wa" target="_blank" rel="noopener" href="' + escAttr(waHref) + '" title="WhatsApp with a personalised message">💬 WhatsApp</a>' : '') +
+                        (waHref ? '<a class="btn-wa" target="_blank" rel="noopener" href="' + escAttr(waHref) + '" title="Open WhatsApp">💬 WhatsApp</a>' : '') +
                     '</div>' +
                 '</div>' +
                 (m.remarks

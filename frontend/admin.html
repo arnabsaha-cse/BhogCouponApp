@@ -898,8 +898,8 @@
         /* Walk-in recent list */
         .walkin-recent { margin-top:16px; }
         .walkin-recent h3 { font-size:13px; color:#888; margin-bottom:6px; text-transform:uppercase; letter-spacing:.5px; }
-        .walkin-recent .wr-item { display:flex; justify-content:space-between; gap:8px; padding:8px 10px; background:#fff; border-radius:8px; margin-bottom:6px; font-size:13px; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
-        .walkin-recent .wr-code { font-weight:700; letter-spacing:1px; color:#1a1a2e; }
+        .walkin-recent .wr-item, #recentLookupsList .wr-item { display:flex; justify-content:space-between; gap:8px; padding:8px 10px; background:#fff; border-radius:8px; margin-bottom:6px; font-size:13px; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+        .walkin-recent .wr-code, #recentLookupsList .wr-code { font-weight:700; letter-spacing:1px; color:#1a1a2e; }
         .scope-note { font-size:12px; color:#888; margin:0 0 10px; }
         .retry-btn { margin-top:10px; padding:8px 16px; background:#667eea; color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:600; }
     </style>
@@ -994,6 +994,13 @@
                 <button class="btn-redeem" id="redeemBtn" onclick="redeemCoupon()">
                     ✅ Mark as Redeemed
                 </button>
+            </div>
+
+            <!-- Previous scans/searches this session — kept visible so a new
+                 lookup never erases what you just saw -->
+            <div id="recentLookupsWrap" style="display:none; margin-top:14px; text-align:left;">
+                <div style="font-size:12px; color:#999; font-weight:600; margin-bottom:4px;">Previous lookups</div>
+                <div id="recentLookupsList"></div>
             </div>
         </div>
     </div>
@@ -1140,6 +1147,72 @@
     }
 
     // ============================================================
+    // Reconcile helpers — a JSONP request is a <script src> tag with a
+    // client-side setTimeout as the only "did it fail" signal. If Apps
+    // Script is just slow (lock contention, cold start, several admins
+    // hitting it at once) the write can still land on the sheet AFTER our
+    // timeout fires. Before showing "Connection error" for a redeem/walk-in,
+    // double-check with a cheap read so we don't alarm the admin over a
+    // write that actually succeeded.
+    // ============================================================
+    function reconcileRedeem(code, date, cb) {
+        jsonpRequest(
+            { action: 'lookup', code: code, date: date || getTodayStr() },
+            function(result) { cb(!!(result && result.status === 'found' && result.redeemed)); },
+            function() { cb(false); },
+            15000
+        );
+    }
+
+    function reconcileWalkin(phone, cb) {
+        jsonpRequest(
+            { action: 'quickSearch', query: phone.replace(/\D/g, ''), date: getTodayStr(), includeRedeemed: 'true' },
+            function(result) {
+                var entry = null;
+                if (result && result.status === 'success' && (result.data || []).length) {
+                    entry = result.data.filter(function(d) { return phoneKey(d.phone) === phoneKey(phone); })[0] || null;
+                }
+                cb(entry);
+            },
+            function() { cb(null); },
+            15000
+        );
+    }
+
+    // ============================================================
+    // Recent lookups — keeps the previous scan/search result visible
+    // (session-only) instead of it being wiped the instant a new scan,
+    // manual code, or phone search is made.
+    // ============================================================
+    var recentLookups = [];
+    var LOOKUP_KEY = 'agomoni_recent_lookups';
+
+    function loadRecentLookups() {
+        try { recentLookups = JSON.parse(sessionStorage.getItem(LOOKUP_KEY) || '[]'); } catch (e) { recentLookups = []; }
+        renderRecentLookups();
+    }
+    function saveRecentLookups() {
+        try { sessionStorage.setItem(LOOKUP_KEY, JSON.stringify(recentLookups)); } catch (e) { /* fine */ }
+    }
+    function logRecentLookup(entry) {
+        entry.ts = Date.now();
+        recentLookups.unshift(entry);
+        recentLookups = recentLookups.slice(0, 6);
+        saveRecentLookups();
+        renderRecentLookups();
+    }
+    function renderRecentLookups() {
+        var wrap = document.getElementById('recentLookupsWrap');
+        var list = document.getElementById('recentLookupsList');
+        if (!wrap || !list) return;
+        wrap.style.display = recentLookups.length ? 'block' : 'none';
+        list.innerHTML = recentLookups.map(function(r) {
+            var badge = r.redeemed ? '✅ Redeemed' : (r.found === false ? '❌ Not found' : '🟢 Valid');
+            return '<div class="wr-item"><span>' + escHtml(r.label) + '</span><span class="wr-code">' + badge + '</span></div>';
+        }).join('');
+    }
+
+    // ============================================================
     // Data cache & state
     // ============================================================
     var allData = [];
@@ -1150,6 +1223,52 @@
     var summaryCache = {};
     var html5QrCode = null;
     var isScanning = false;
+
+    // Scanner-tab local cache — today's tab only, kept in memory so phone
+    // search is instant (client-side filter) instead of a live round trip
+    // to Apps Script on every search, same trick the Search tab already
+    // uses via allData.
+    var scannerData = [];
+    var scannerDataLoaded = false;
+    var scannerDataDate = null;
+    var scannerCacheTimer = null;
+
+    function loadScannerCache() {
+        var d = getTodayStr();
+        scannerDataDate = d;
+        jsonpRequest(
+            { action: 'list', date: d },
+            function(result) {
+                if (result && result.status === 'success') {
+                    scannerData = result.data || [];
+                    scannerDataLoaded = true;
+                    // If the admin already typed a full number while we were loading,
+                    // re-run the search now that it can resolve instantly.
+                    var input = document.getElementById('scannerSearchInput');
+                    if (input && input.value.replace(/\D/g, '').length === 10) scannerSearch();
+                }
+            },
+            function() { /* silent — scannerSearch() falls back to a live search */ },
+            20000
+        );
+    }
+
+    function startScannerCacheRefresh() {
+        loadScannerCache();
+        if (scannerCacheTimer) clearInterval(scannerCacheTimer);
+        // Refresh in the background every 20s so redemptions/registrations
+        // made from OTHER admins' devices show up here too.
+        scannerCacheTimer = setInterval(loadScannerCache, 20000);
+    }
+
+    function patchScannerData(couponCode, patch) {
+        for (var i = 0; i < scannerData.length; i++) {
+            if (scannerData[i].couponCode === couponCode) {
+                Object.assign(scannerData[i], patch);
+                return;
+            }
+        }
+    }
 
     // ============================================================
     // Login / Logout

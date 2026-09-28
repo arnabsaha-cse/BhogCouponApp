@@ -97,7 +97,7 @@ const CONFIG = {
     // PROD  → 'BHOG'   (coupons look like BHOG-XXXX)
     // NON_PROD → 'TEST' (coupons look like TEST-XXXX)
     //
-    COUPON_PREFIX: 'BHOG',
+    COUPON_PREFIX: 'TEST',
 
     // ──────────────────────────────────────────────────────────
     // Registration Settings

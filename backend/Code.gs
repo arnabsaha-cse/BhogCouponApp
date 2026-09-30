@@ -306,8 +306,9 @@ function registerUser(data) {
   var phone = (data.phone || '').toString().trim();
 
   // Validate required fields
-  if (!name || !phone) {
-    return { status: 'error', message: 'Name and phone are required' };
+  if (!name) name = 'Walk-in';   // name is optional for walk-ins
+  if (!phone) {
+    return { status: 'error', message: 'Phone is required' };
   }
 
   // Parse date selections
@@ -453,8 +454,9 @@ function registerWalkin(data) {
   var phone = (data.phone || '').toString().trim();
   var plates = parseInt(data.plates, 10) || 1;
 
-  if (!name || !phone) {
-    return { status: 'error', message: 'Name and phone are required' };
+  if (!name) name = 'Walk-in';   // name is optional for walk-ins
+  if (!phone) {
+    return { status: 'error', message: 'Phone is required' };
   }
   if (plates > config.MAX_PLATES_PER_REGISTRATION) {
     plates = config.MAX_PLATES_PER_REGISTRATION;

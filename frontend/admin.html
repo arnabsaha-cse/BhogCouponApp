@@ -1006,6 +1006,10 @@
 
                 <form class="walkin-form" id="walkinForm" onsubmit="submitWalkin(event)">
                     <div class="form-group">
+                        <label for="walkinName">Name</label>
+                        <input type="text" id="walkinName" placeholder="Enter name (blank = Walk-in)" autocomplete="off">
+                    </div>
+                    <div class="form-group">
                         <label for="walkinPhone">Phone Number *</label>
                         <input type="tel" id="walkinPhone" placeholder="10-digit phone number"
                                required pattern="[0-9]{10}" maxlength="10" inputmode="numeric" autocomplete="off">
@@ -1014,10 +1018,6 @@
                         <label for="walkinPlates">Number of Coupons (max <span id="walkinMaxPlates">20</span>)</label>
                         <input type="number" id="walkinPlates" min="1" max="20" value="1"
                                required inputmode="numeric" autocomplete="off">
-                    </div>
-                    <div class="form-group">
-                        <label for="walkinName">Name (optional)</label>
-                        <input type="text" id="walkinName" placeholder="Leave blank to save as Walk-in" autocomplete="off">
                     </div>
                     <button type="submit" class="btn-walkin-submit" id="walkinSubmitBtn">
                         Register &amp; Redeem
@@ -1595,8 +1595,8 @@
     function jumpToWalkin() {
         var card = document.getElementById('walkinCard');
         if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        var p = document.getElementById('walkinPlates');
-        if (p) { p.focus(); p.select(); }
+        var n = document.getElementById('walkinName');
+        if (n) n.focus();
     }
 
     function scannerSearch() {

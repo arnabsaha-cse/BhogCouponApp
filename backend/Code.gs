@@ -248,6 +248,17 @@ function phoneToStr_(v) {
 }
 function digitsOnly_(v) { return phoneToStr_(v).replace(/\D/g, ''); }
 /** Last 10 digits — so "+91 98765 43210", "09876543210" and "9876543210" all match. */
+/**
+ * Registration only: returns a clean 10-digit Indian mobile number, or '' if invalid.
+ * Accepts +91 / 91 / 0091 / 0 prefixes and any spaces or dashes.
+ */
+function normalizeMobile10_(v) {
+  var d = digitsOnly_(v);
+  if (d.length === 14 && d.indexOf('0091') === 0) d = d.slice(4);
+  else if (d.length === 12 && d.indexOf('91') === 0) d = d.slice(2);
+  else if (d.length === 11 && d.charAt(0) === '0') d = d.slice(1);
+  return /^[6-9][0-9]{9}$/.test(d) ? d : '';
+}
 function last10_(v) {
   var d = digitsOnly_(v);
   return d.length > 10 ? d.slice(-10) : d;
@@ -303,12 +314,14 @@ function appendEntryRow_(sheet, row) {
 function registerUser(data) {
   var config = getConfig();
   var name = (data.name || '').toString().trim();
-  var phone = (data.phone || '').toString().trim();
+  var phone = normalizeMobile10_(data.phone);   // always stored as 10 digits
 
-  // Validate required fields
-  if (!name) name = 'Walk-in';   // name is optional for walk-ins
+  // Validate required fields (online registration: both are mandatory)
+  if (!name) {
+    return { status: 'error', message: 'Name is required' };
+  }
   if (!phone) {
-    return { status: 'error', message: 'Phone is required' };
+    return { status: 'error', message: 'Please enter a valid 10-digit mobile number' };
   }
 
   // Parse date selections

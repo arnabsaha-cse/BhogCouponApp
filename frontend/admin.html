@@ -902,14 +902,19 @@
         .walkin-recent .wr-code, #recentLookupsList .wr-code { font-weight:700; letter-spacing:1px; color:#1a1a2e; }
         .scope-note { font-size:12px; color:#888; margin:0 0 10px; }
         .retry-btn { margin-top:10px; padding:8px 16px; background:#667eea; color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:600; }
-        /* All Entries: big tap-friendly contact buttons */
-        .ico-row { display:flex; gap:10px; margin:8px 0 4px; }
-        .ico-btn { display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px;
-                   border-radius:50%; font-size:20px; text-decoration:none; cursor:pointer; border:none;
+        /* Entry cards (Search + All Entries): name / details / icon row */
+        .search-result-item.entry-card { display:block; }
+        .entry-card .name { font-weight:600; font-size:15px; }
+        .entry-card .meta { font-size:13px; color:#666; margin-top:2px; }
+        .entry-card .meta .ccode { font-weight:700; color:#667eea; }
+        .ico-row { display:flex; align-items:center; flex-wrap:nowrap; gap:8px; margin-top:8px; }
+        .ico-btn { display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; width:36px; height:36px;
+                   border-radius:50%; font-size:16px; text-decoration:none; cursor:pointer; border:none;
                    background:#eef2ff; color:#333; -webkit-tap-highlight-color:transparent; }
         .ico-btn.call { background:#3498db; color:#fff; }
         .ico-btn.wa { background:#25D366; }
-        .ico-btn.wa svg { width:24px; height:24px; fill:#fff; }
+        .ico-btn.wa svg { width:20px; height:20px; fill:#fff; }
+        .ico-row .btn-small-redeem { margin-left:auto; padding:8px 14px; white-space:nowrap; }
     </style>
 </head>
 <body>
@@ -994,16 +999,9 @@
                 <button onclick="scannerSearch()">Search</button>
                 <button onclick="clearScannerSearch()" title="Clear" style="background:#95a5a6;">✕</button>
             </div>
-            <div id="scannerSearchResults" style="margin-top:10px; text-align:left;"></div>
 
-            <!-- Scan result -->
-            <div class="scan-result" id="scanResult">
-                <div class="result-header" id="resultHeader"></div>
-                <div class="result-details" id="resultDetails"></div>
-                <button class="btn-redeem" id="redeemBtn" onclick="redeemCoupon()">
-                    ✅ Mark as Redeemed
-                </button>
-            </div>
+            <!-- ONE result area for scan / manual code / phone search (same card design for all) -->
+            <div id="scanResult" style="text-align:left;"></div>
 
 
             <!-- WALK-IN (always visible, under the search) -->
@@ -1593,7 +1591,7 @@
             if (scannerSearchTimer) clearTimeout(scannerSearchTimer);
             scannerSearchTimer = setTimeout(scannerSearch, 0);
         } else {
-            document.getElementById('scannerSearchResults').innerHTML = '';
+            resultBox().innerHTML = '';
             clearAutoPrefill();   // number is being edited — don't leave a stale typo in the walk-in form
         }
     }
@@ -1614,7 +1612,7 @@
     function clearScannerSearch() {
         var inp = document.getElementById('scannerSearchInput');
         inp.value = '';
-        document.getElementById('scannerSearchResults').innerHTML = '';
+        resultBox().innerHTML = '';
         clearAutoPrefill();
         inp.focus();
     }
@@ -1628,219 +1626,161 @@
     function scannerSearch() {
         var raw = document.getElementById('scannerSearchInput').value.trim();
         var query = raw.replace(/\D/g, '');
-        var resultsDiv = document.getElementById('scannerSearchResults');
 
         if (query.length !== 10) {
-            resultsDiv.innerHTML = '<div style="color:#aaa; font-size:13px; text-align:center; padding:8px;">Enter a 10-digit phone number</div>';
+            showMessageCard('Enter a 10-digit phone number');
             return;
         }
 
-        var searchDate = getTodayStr(); // Always search today only
+        currentScanCode = null;                 // a phone search replaces any code result (and cancels its background check)
+        var searchDate = getTodayStr();         // always today only
 
         // FAST PATH: today's tab is already in memory -> no network at all
         if (cacheIsFresh()) {
-            renderScannerSearchResults(cacheFindByPhone(query), searchDate, query);
+            renderPhoneResults(cacheFindByPhone(query), query);
             return;
         }
 
-        resultsDiv.innerHTML = '<div style="color:#999; font-size:13px; text-align:center; padding:8px;">Searching today...</div>';
-
+        showMessageCard('⏳ Searching today...');
         jsonpRequest(
             { action: 'quickSearch', query: query, date: searchDate, includeRedeemed: 'true' },
             function(result) {
-                if (result.status === 'success') {
-                    renderScannerSearchResults(result.data || [], searchDate, query);
-                } else {
-                    resultsDiv.innerHTML = '<div class="no-results">' + escHtml(result.message || 'Search failed') + '</div>';
-                }
+                if (result.status === 'success') renderPhoneResults(result.data || [], query);
+                else showMessageCard(result.message || 'Search failed', 'result-notfound');
             },
-            function() {
-                resultsDiv.innerHTML = '<div class="no-results">Connection error while searching</div>';
-            }
+            function() { showMessageCard('Connection error while searching', 'result-notfound'); }
         );
     }
 
-    function renderScannerSearchResults(results, searchDate, query) {
-        var resultsDiv = document.getElementById('scannerSearchResults');
+    // ============================================================
+    // ONE result card design — used by QR scan, manual code AND phone search
+    // ============================================================
+    function resultBox() { return document.getElementById('scanResult'); }
 
+    function showMessageCard(text, cls) {
+        resultBox().innerHTML = '<div class="scan-result show ' + (cls || '') + '">' +
+            '<div class="result-header" style="font-size:15px;">' + text + '</div></div>';
+    }
+
+    function cardHtml(d) {
+        var redeemed = !!d.redeemed;
+        var rows =
+            '<span>Name:</span> ' + escHtml(d.name) + '<br>' +
+            '<span>Phone:</span> ' + escHtml(d.phone) + '<br>' +
+            '<span>Date:</span> ' + escHtml(d.date) + '<br>' +
+            '<span>Plates:</span> ' + escHtml(String(d.plates)) + '<br>' +
+            '<span>Code:</span> ' + escHtml(d.couponCode);
+        if (redeemed) {
+            return '<div class="scan-result show result-redeemed">' +
+                '<div class="result-header">⚠️ Already Redeemed</div>' +
+                '<div class="result-details">' + rows +
+                    (d.redeemedAt ? '<br><span>Redeemed at:</span> ' + escHtml(String(d.redeemedAt)) : '') + '</div>' +
+                '</div>';
+        }
+        return '<div class="scan-result show result-valid">' +
+            '<div class="result-header">✅ Valid Coupon</div>' +
+            '<div class="result-details">' + rows + '</div>' +
+            '<button class="btn-redeem" onclick="redeemCard(this, \'' + escAttr(d.couponCode) + '\', \'' + escAttr(d.date || getTodayStr()) + '\')">' +
+                '✅ Mark as Redeemed — Give ' + escHtml(String(d.plates)) + ' plate(s)</button>' +
+            '</div>';
+    }
+
+    function showCards(list) {
+        resultBox().innerHTML = list.slice(0, 10).map(cardHtml).join('');
+    }
+
+    function renderPhoneResults(results, query) {
         if (results.length === 0) {
-            resultsDiv.innerHTML = '<div class="no-results" style="padding:16px;">No registration found for today.<br>' +
-                '<small>Typo? Edit the number above to search again.</small><br>' +
-                '<button class="btn-small-redeem" style="margin-top:8px;" onclick="jumpToWalkin()">➕ Walk-in this number ↓</button></div>';
+            resultBox().innerHTML = '<div class="scan-result show result-notfound">' +
+                '<div class="result-header">❌ No registration found for today</div>' +
+                '<div class="result-details">Typo? Edit the number above to search again, or register this number as a walk-in.</div>' +
+                '<button class="btn-redeem" style="background:#3498db;" onclick="jumpToWalkin()">➕ Walk-in this number ↓</button>' +
+                '</div>';
             if (query) prefillWalkinPhone(query);
             return;
         }
         clearAutoPrefill();
-
-        var html = '';
-        results.slice(0, 10).forEach(function(d) {
-            var alreadyRedeemed = !!d.redeemed;
-            html += '<div class="search-result-item">' +
-                '<div class="info">' +
-                    '<div class="name">' + escHtml(d.name) + '</div>' +
-                    '<div class="meta">' + escHtml(d.phone) + ' · ' + escHtml(String(d.plates)) + ' plate(s) · ' + escHtml(d.couponCode) + '</div>' +
-                '</div>' +
-                '<div class="actions">' +
-                    (alreadyRedeemed
-                        ? '<button class="btn-small-redeem redeemed" disabled>✅ Already Redeemed</button>'
-                        : '<button class="btn-small-redeem" onclick="inlineRedeem(\'' + escAttr(d.couponCode) + '\', \'' + escAttr(d.date || searchDate) + '\', this)">✅ Mark Redeemed</button>'
-                    ) +
-                '</div>' +
-            '</div>';
-        });
-        resultsDiv.innerHTML = html;
+        showCards(results);
     }
 
-    // Direct redeem from phone search results — no intermediate lookup step
-    function inlineRedeem(code, date, btn) {
+    // Redeem from any card (scan, manual code, or phone search)
+    function redeemCard(btn, code, date) {
+        var card = btn.closest('.scan-result');
         btn.disabled = true;
         btn.textContent = '⏳ Redeeming...';
         jsonpRequest(
             { action: 'redeem', code: code, date: date || getTodayStr() },
             function(result) {
                 if (result.status === 'success') {
-                    btn.textContent = '✅ Redeemed!';
-                    btn.classList.add('redeemed');
+                    card.className = 'scan-result show result-redeemed';
+                    card.querySelector('.result-header').textContent = '🎉 Redeemed Successfully!';
+                    btn.textContent = '✅ Done — Plates Given';
                     if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
                     patchScannerData(code, { redeemed: true, redeemedAt: new Date().toISOString() });
                     refreshData(true);
                 } else {
                     btn.disabled = false;
-                    btn.textContent = '✅ Mark Redeemed';
+                    btn.textContent = '✅ Mark as Redeemed';
                     alert('Redeem failed: ' + (result.message || 'Unknown error'));
                 }
             },
             function() {
                 btn.disabled = false;
-                btn.textContent = '✅ Mark Redeemed';
+                btn.textContent = '✅ Mark as Redeemed';
                 alert('Connection error. Please try again.');
             }
         );
     }
 
     // ============================================================
-    // Coupon lookup
+    // Coupon lookup (QR scan + manual code)
     // ============================================================
-    function renderLookupResult(result, code) {
-        var resultDiv = document.getElementById('scanResult');
-        var headerDiv = document.getElementById('resultHeader');
-        var detailsDiv = document.getElementById('resultDetails');
-        var redeemBtn = document.getElementById('redeemBtn');
-        if (result.status === 'found') {
-            var rows =
-                '<span>Name:</span> ' + escHtml(result.name) + '<br>' +
-                '<span>Phone:</span> ' + escHtml(result.phone) + '<br>' +
-                '<span>Date:</span> ' + escHtml(result.date) + '<br>' +
-                '<span>Plates:</span> ' + escHtml(String(result.plates)) + '<br>' +
-                '<span>Code:</span> ' + escHtml(result.couponCode);
-            if (result.redeemed) {
-                resultDiv.className = 'scan-result show result-redeemed';
-                headerDiv.textContent = '⚠️ Already Redeemed';
-                detailsDiv.innerHTML = rows + '<br><span>Redeemed at:</span> ' + escHtml(result.redeemedAt || 'Unknown');
-                redeemBtn.style.display = 'none';
-            } else {
-                resultDiv.className = 'scan-result show result-valid';
-                headerDiv.textContent = '✅ Valid Coupon';
-                detailsDiv.innerHTML = rows;
-                redeemBtn.style.display = 'block';
-                redeemBtn.disabled = false;
-                redeemBtn.textContent = '✅ Mark as Redeemed — Give ' + result.plates + ' plate(s)';
-            }
-        } else {
-            resultDiv.className = 'scan-result show result-notfound';
-            headerDiv.textContent = '❌ Coupon Not Found';
-            detailsDiv.textContent = 'Code "' + code + '" does not exist. Check the code and try again.';
-            redeemBtn.style.display = 'none';
-        }
-    }
-
     function lookupCode(code, dateHint) {
         currentScanCode = code;
         currentScanDate = dateHint || getTodayStr();
-        var resultDiv = document.getElementById('scanResult');
-        var headerDiv = document.getElementById('resultHeader');
-        var detailsDiv = document.getElementById('resultDetails');
-        var redeemBtn = document.getElementById('redeemBtn');
 
-        // FAST PATH: coupon is in today's in-memory copy -> show it instantly,
+        // A code lookup replaces any phone-search result — clear the phone box too
+        var phoneInput = document.getElementById('scannerSearchInput');
+        if (phoneInput) phoneInput.value = '';
+        clearAutoPrefill();
+
+        // FAST PATH: coupon is in today's in-memory copy -> show instantly,
         // then quietly confirm with the server (catches a redeem done on
-        // another admin's device within the last cache-refresh window).
+        // another device within the last cache-refresh window).
         var cached = cacheFindByCode(code);
         if (cached) {
-            renderLookupResult({
-                status: 'found', couponCode: cached.couponCode, name: cached.name, phone: cached.phone,
-                date: cached.date, plates: cached.plates, redeemed: cached.redeemed, redeemedAt: cached.redeemedAt
-            }, code);
+            showCards([cached]);
             jsonpRequest(
                 { action: 'lookup', code: code, date: currentScanDate },
                 function(result) {
                     if (currentScanCode !== code) return;              // admin already moved on
                     if (result.status === 'found' && result.redeemed && !cached.redeemed) {
                         patchScannerData(result.couponCode, { redeemed: true, redeemedAt: result.redeemedAt });
-                        renderLookupResult(result, code);             // flip to "Already Redeemed"
+                        showCards([result]);                           // flip to "Already Redeemed"
                     }
                 },
-                function() { /* silent — cached result stays; redeem is re-checked server-side anyway */ },
+                function() { /* silent — redeem is re-checked server-side anyway */ },
                 15000
             );
             return;
         }
 
         // SLOW PATH: not cached (cache not loaded yet, or code is from another day)
-        resultDiv.className = 'scan-result show';
-        headerDiv.textContent = '⏳ Looking up...';
-        detailsDiv.textContent = '';
-        redeemBtn.style.display = 'none';
-
+        showMessageCard('⏳ Looking up...');
         jsonpRequest(
             { action: 'lookup', code: code, date: currentScanDate },
-            function(result) { renderLookupResult(result, code); },
-            function(err) {
-                console.error('Lookup error:', err);
-                resultDiv.className = 'scan-result show result-notfound';
-                headerDiv.textContent = '⚠️ Connection Error';
-                detailsDiv.innerHTML = 'Could not reach the server. Check your internet and try again.' +
-                    '<br><small style="color:#aaa;">If this persists, the Apps Script deployment may need to be re-deployed as "Anyone" access.</small>';
-                redeemBtn.style.display = 'none';
-            }
-        );
-    }
-
-    // ============================================================
-    // Redeem coupon
-    // ============================================================
-    function redeemCoupon() {
-        if (!currentScanCode) return;
-
-        var redeemBtn = document.getElementById('redeemBtn');
-        redeemBtn.disabled = true;
-        redeemBtn.textContent = '⏳ Redeeming...';
-
-        jsonpRequest(
-            { action: 'redeem', code: currentScanCode, date: currentScanDate || getTodayStr() },
             function(result) {
-                if (result.status === 'success') {
-                    var resultDiv = document.getElementById('scanResult');
-                    var headerDiv = document.getElementById('resultHeader');
-                    resultDiv.className = 'scan-result show result-redeemed';
-                    headerDiv.textContent = '🎉 Redeemed Successfully!';
-                    redeemBtn.textContent = '✅ Done — Plates Given';
-                    redeemBtn.disabled = true;
-
-                    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-                    patchScannerData(currentScanCode, { redeemed: true, redeemedAt: new Date().toISOString() });
-                    refreshData(true);
+                if (currentScanCode !== code) return;
+                if (result.status === 'found') {
+                    showCards([result]);
                 } else {
-                    alert('Redeem failed: ' + (result.message || 'Unknown error'));
-                    redeemBtn.disabled = false;
-                    redeemBtn.textContent = '✅ Mark as Redeemed';
+                    showMessageCard('❌ Coupon Not Found<div style="font-weight:400;font-size:14px;margin-top:8px;">Code "' +
+                        escHtml(code) + '" does not exist. Check the code and try again.</div>', 'result-notfound');
                 }
             },
             function(err) {
-                console.error('Redeem error:', err);
-                alert('Connection error. Please try again.');
-                redeemBtn.disabled = false;
-                redeemBtn.textContent = '✅ Mark as Redeemed';
+                console.error('Lookup error:', err);
+                showMessageCard('⚠️ Connection Error<div style="font-weight:400;font-size:14px;margin-top:8px;">Could not reach the server. Check your internet and try again.</div>', 'result-notfound');
             }
         );
     }
@@ -1874,6 +1814,25 @@
         renderSearchResults(results);
     }
 
+    // One compact card for Search + All Entries:
+    //   line 1: name   line 2: phone · day · plates · code   line 3: call / WhatsApp / copy / redeem
+    function entryRowHtml(d) {
+        var waHref = buildWaReminderHref(d);
+        return '<div class="search-result-item entry-card">' +
+            '<div class="name">' + escHtml(d.name) + '</div>' +
+            '<div class="meta">' + escHtml(d.phone) + ' · ' + escHtml(getDayLabel(d.date) || d.date) + ' · ' +
+                escHtml(String(d.plates)) + ' plate(s) · <span class="ccode">' + escHtml(d.couponCode) + '</span></div>' +
+            '<div class="ico-row">' +
+                '<a class="ico-btn call" href="tel:' + escAttr(d.phone) + '" title="Call">📞</a>' +
+                (waHref && !d.redeemed ? '<a class="ico-btn wa" href="' + escAttr(waHref) + '" target="_blank" rel="noopener" title="Send WhatsApp reminder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></a>' : '') +
+                '<span class="ico-btn" onclick="copyPhone(\'' + escAttr(d.phone) + '\', this)" title="Copy number">📋</span>' +
+                (d.redeemed
+                    ? '<button class="btn-small-redeem redeemed">✅ Done</button>'
+                    : '<button class="btn-small-redeem" onclick="redeemFromList(\'' + escAttr(d.couponCode) + '\', this, \'' + escAttr(d.date) + '\')">Redeem</button>') +
+            '</div>' +
+        '</div>';
+    }
+
     function renderSearchResults(results) {
         var container = document.getElementById('searchResults');
 
@@ -1884,20 +1843,7 @@
 
         var html = '';
         results.forEach(function(d) {
-            html += '<div class="search-result-item">' +
-                '<div class="info">' +
-                    '<div class="name">' + escHtml(d.name) + '</div>' +
-                    '<div class="meta">' + escHtml(d.phone) + ' <a href="tel:' + escAttr(d.phone) + '" title="Call" style="text-decoration:none;">📞</a>' +
-                        ' · ' + escHtml(getDayLabel(d.date) || d.date) + ' · ' + escHtml(String(d.plates)) + ' plate(s)</div>' +
-                '</div>' +
-                '<div class="code">' + escHtml(d.couponCode) + '</div>' +
-                '<div class="actions">' +
-                    (d.redeemed
-                        ? '<button class="btn-small-redeem redeemed">✅ Done</button>'
-                        : '<button class="btn-small-redeem" onclick="redeemFromList(\'' + escAttr(d.couponCode) + '\', this, \'' + escAttr(d.date) + '\')">Redeem</button>'
-                    ) +
-                '</div>' +
-            '</div>';
+            html += entryRowHtml(d);
         });
 
         container.innerHTML = html;
@@ -1930,27 +1876,7 @@
 
         var html = '';
         allData.forEach(function(d) {
-            var waHref = buildWaReminderHref(d);
-            html += '<div class="search-result-item">' +
-                '<div class="info">' +
-                    '<div class="name">' + escHtml(d.name) + '</div>' +
-                    '<div class="meta">' +
-                        escHtml(d.phone) + ' · ' + escHtml(getDayLabel(d.date) || d.date) + ' · ' + escHtml(String(d.plates)) + ' plate(s)' +
-                    '</div>' +
-                    '<div class="ico-row">' +
-                        '<a class="ico-btn call" href="tel:' + escAttr(d.phone) + '" title="Call">📞</a>' +
-                        (waHref && !d.redeemed ? '<a class="ico-btn wa" href="' + escAttr(waHref) + '" target="_blank" rel="noopener" title="Send WhatsApp reminder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></a>' : '') +
-                        '<span class="ico-btn" onclick="copyPhone(\'' + escAttr(d.phone) + '\', this)" title="Copy number">📋</span>' +
-                    '</div>' +
-                '</div>' +
-                '<div class="code">' + escHtml(d.couponCode) + '</div>' +
-                '<div class="actions">' +
-                    (d.redeemed
-                        ? '<button class="btn-small-redeem redeemed">✅ Done</button>'
-                        : '<button class="btn-small-redeem" onclick="redeemFromList(\'' + escAttr(d.couponCode) + '\', this, \'' + escAttr(d.date) + '\')">Redeem</button>'
-                    ) +
-                '</div>' +
-            '</div>';
+            html += entryRowHtml(d);
         });
 
         container.innerHTML = html;
@@ -2313,7 +2239,7 @@
                     walkinPrefilledPhone = '';
                     // clear the phone search so the next person starts clean
                     var ssi = document.getElementById('scannerSearchInput');
-                    if (ssi) { ssi.value = ''; document.getElementById('scannerSearchResults').innerHTML = ''; ssi.focus(); }
+                    if (ssi) { ssi.value = ''; resultBox().innerHTML = ''; ssi.focus(); }
                     // add to in-memory copy so they can be searched/scanned instantly
                     upsertScannerEntry({ timestamp: result.timestamp || new Date().toISOString(), name: name, phone: phone,
                         date: result.date, plates: plates, couponCode: result.couponCode, redeemed: true,

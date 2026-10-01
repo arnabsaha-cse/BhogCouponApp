@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agomoni Durga Puja - Bhog Distribution</title>
+    <link rel="icon" type="image/png" href="agomoni_small_logo.png">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -363,6 +364,28 @@
             margin-top: 8px;
             margin-left: 8px;
         }
+        /* ===== Floating Help button (controlled by CONFIG.HELP_ENABLED) ===== */
+        .help-widget { display: none; position: fixed; right: 16px; bottom: 16px; z-index: 1100; }
+        .help-widget.on { display: block; }
+        .help-fab {
+            display: flex; align-items: center; gap: 6px;
+            background: #c62828; color: #fff; border: none; border-radius: 28px;
+            padding: 12px 18px; font-size: 15px; font-weight: 700; cursor: pointer;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+        }
+        .help-menu {
+            display: none; position: absolute; right: 0; bottom: 58px; min-width: 200px;
+            background: #fff; border-radius: 12px; padding: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .help-menu.open { display: block; }
+        .help-menu .help-title { font-size: 12px; color: #888; padding: 4px 8px 6px; }
+        .help-menu a {
+            display: block; padding: 12px; margin-top: 4px; border-radius: 8px;
+            text-decoration: none; font-size: 15px; font-weight: 600; color: #fff;
+        }
+        .help-menu a.call { background: #3498db; }
+        .help-menu a.wa { background: #25d366; }
     </style>
 </head>
 <body>
@@ -429,6 +452,10 @@
 
         <div class="qr-container" id="qrContainer"></div>
 
+        <p class="msg-note" style="background:#e8f5e9; color:#2e7d32; border-radius:8px; padding:8px 10px;">
+            📲 Our team will also share your coupon details on <strong style="color:#2e7d32;">WhatsApp</strong> on the day of the event.
+        </p>
+
         <p class="msg-note">
             <strong>📸 Screenshot this page</strong> to save your coupons.
             Show the coupon code(s) or QR at the distribution point.
@@ -439,6 +466,16 @@
             <button class="btn-new" onclick="newRegistration()">+ New Registration</button>
         </div>
     </div>
+</div>
+
+<!-- Floating Help (hidden unless CONFIG.HELP_ENABLED is 1) -->
+<div class="help-widget" id="helpWidget">
+    <div class="help-menu" id="helpMenu">
+        <div class="help-title">Need help? Contact us</div>
+        <a class="call" id="helpCall" href="#">📞 Call us</a>
+        <a class="wa" id="helpWa" href="#" target="_blank" rel="noopener">💬 WhatsApp us</a>
+    </div>
+    <button type="button" class="help-fab" id="helpFab" aria-label="Help">❓ Help</button>
 </div>
 
 <!-- Shared config (defines CONFIG.QRCODE_LIB_URL, used below) -->
@@ -802,6 +839,39 @@
     function newRegistration() {
         document.getElementById('successOverlay').classList.remove('show');
     }
+</script>
+
+<script>
+    // ── Help button (Call / WhatsApp) — all values come from config.js ──
+    (function() {
+        var on = CONFIG.HELP_ENABLED === 1 || CONFIG.HELP_ENABLED === true || CONFIG.HELP_ENABLED === '1';
+        if (!on) return;   // feature off: widget stays hidden
+
+        function digits(v) { return String(v || '').replace(/\D/g, ''); }
+        function withCountry(v) {
+            var d = digits(v);
+            return d.length === 10 ? (digits(CONFIG.DEFAULT_COUNTRY_CODE) || '91') + d : d;
+        }
+        var callNum = withCountry(CONFIG.HELP_CALL_NUMBER);
+        var waNum   = withCountry(CONFIG.HELP_WHATSAPP_NUMBER);
+        if (!callNum && !waNum) return;
+
+        var widget = document.getElementById('helpWidget');
+        var menu   = document.getElementById('helpMenu');
+        var callEl = document.getElementById('helpCall');
+        var waEl   = document.getElementById('helpWa');
+
+        if (callNum) callEl.href = 'tel:+' + callNum; else callEl.style.display = 'none';
+        if (waNum)   waEl.href = 'https://wa.me/' + waNum + '?text=' + encodeURIComponent(CONFIG.HELP_WHATSAPP_MESSAGE || 'Hello, I need help.');
+        else waEl.style.display = 'none';
+
+        document.getElementById('helpFab').addEventListener('click', function(e) {
+            e.stopPropagation();
+            menu.classList.toggle('open');
+        });
+        document.addEventListener('click', function() { menu.classList.remove('open'); });
+        widget.classList.add('on');
+    })();
 </script>
 
 </body>

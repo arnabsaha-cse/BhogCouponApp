@@ -81,6 +81,18 @@ const CONFIG = {
     DEFAULT_COUNTRY_CODE: '91',
 
     // ──────────────────────────────────────────────────────────
+    // Help Button (registration page)
+    // ──────────────────────────────────────────────────────────
+    // 1 = show the floating "Help" button (Call / WhatsApp), 0 = hide it completely.
+    // Numbers can be written with spaces; a 10-digit number gets
+    // DEFAULT_COUNTRY_CODE added automatically.
+    //
+    HELP_ENABLED: 1,
+    HELP_CALL_NUMBER: '888 548 7780',
+    HELP_WHATSAPP_NUMBER: '888 548 7780',
+    HELP_WHATSAPP_MESSAGE: 'Hello, I need help with the Agomoni bhog registration.',
+
+    // ──────────────────────────────────────────────────────────
     // Event Logo
     // ──────────────────────────────────────────────────────────
     // URL or relative path to your event logo image.
@@ -106,10 +118,15 @@ const CONFIG = {
     MAX_PLATES: 20,
 
     // ──────────────────────────────────────────────────────────
-    // Admin Settings
+    // Admin Settings (2 roles)
     // ──────────────────────────────────────────────────────────
-    // 4-digit PIN to access the admin page.
-    // CHANGE THIS before going live!
+    // ADMIN_PIN       → Volunteer: sees ONLY the Scanner screen
+    //                   (scan / search by phone / walk-in).
+    // SUPER_ADMIN_PIN → Organiser: sees everything (Search, All Entries,
+    //                   Dates, Summary, Members, stats).
+    // Both are 4 digits and must be different.
+    // CHANGE BOTH before going live!
     //
-    ADMIN_PIN: '1234'
+    ADMIN_PIN: '1234',
+    SUPER_ADMIN_PIN: '5678'
 };

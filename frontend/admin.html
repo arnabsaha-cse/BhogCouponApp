@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bhog Distribution - Admin</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍽️</text></svg>">
+    <link rel="icon" type="image/png" href="agomoni_small_logo.png">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -902,6 +902,14 @@
         .walkin-recent .wr-code, #recentLookupsList .wr-code { font-weight:700; letter-spacing:1px; color:#1a1a2e; }
         .scope-note { font-size:12px; color:#888; margin:0 0 10px; }
         .retry-btn { margin-top:10px; padding:8px 16px; background:#667eea; color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:600; }
+        /* All Entries: big tap-friendly contact buttons */
+        .ico-row { display:flex; gap:10px; margin:8px 0 4px; }
+        .ico-btn { display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px;
+                   border-radius:50%; font-size:20px; text-decoration:none; cursor:pointer; border:none;
+                   background:#eef2ff; color:#333; -webkit-tap-highlight-color:transparent; }
+        .ico-btn.call { background:#3498db; color:#fff; }
+        .ico-btn.wa { background:#25D366; }
+        .ico-btn.wa svg { width:24px; height:24px; fill:#fff; }
     </style>
 </head>
 <body>
@@ -922,7 +930,7 @@
 <div class="admin-panel" id="adminPanel">
     <!-- Header -->
     <div class="admin-header">
-        <h1>🍽️ Bhog Distribution Admin</h1>
+        <h1 id="adminTitle">🍽️ Bhog Distribution Admin</h1>
         <button class="btn-logout" onclick="logoutAdmin()">Logout</button>
     </div>
 
@@ -1296,9 +1304,25 @@
     // ============================================================
     // Login / Logout
     // ============================================================
+    // Role: Volunteer (ADMIN_PIN) sees Scanner only; Super admin sees everything.
+    var isSuperAdmin = false;
+    function applyRole() {
+        var show = isSuperAdmin ? '' : 'none';
+        ['.stats-bar', '.filter-bar', '.tabs'].forEach(function(sel) {
+            var el = document.querySelector(sel);
+            if (el) el.style.display = show;
+        });
+        var title = document.getElementById('adminTitle');
+        if (title) title.textContent = isSuperAdmin ? '🍽️ Bhog Distribution Admin' : '🍽️ Bhog Counter';
+        switchTab('scanner');   // always start on the scanner
+    }
+
     function loginAdmin() {
         var pin = document.getElementById('pinInput').value;
-        if (pin === CONFIG.ADMIN_PIN) {
+        var superPin = CONFIG.SUPER_ADMIN_PIN || CONFIG.ADMIN_PIN;   // no super PIN set -> ADMIN_PIN keeps full access
+        if (pin === superPin || pin === CONFIG.ADMIN_PIN) {
+            isSuperAdmin = (pin === superPin);
+            applyRole();
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('adminPanel').style.display = 'block';
             populateDateFilter();
@@ -1320,6 +1344,7 @@
         document.getElementById('loginScreen').style.display = 'flex';
         document.getElementById('adminPanel').style.display = 'none';
         document.getElementById('pinInput').value = '';
+        isSuperAdmin = false;
     }
 
     // ============================================================
@@ -1425,6 +1450,7 @@
     // Data fetching
     // ============================================================
     function refreshData(silent) {
+        if (!isSuperAdmin) return;   // volunteers use the scanner cache only — skip the heavy list/stats load
         var dateFilter = document.getElementById('dateFilter').value;
         var seq = ++refreshSeq;
         var box = document.getElementById('allEntries');
@@ -1909,11 +1935,12 @@
                 '<div class="info">' +
                     '<div class="name">' + escHtml(d.name) + '</div>' +
                     '<div class="meta">' +
-                        escHtml(d.phone) +
-                        ' <a href="tel:' + escAttr(d.phone) + '" title="Call" style="text-decoration:none;">📞</a>' +
-                        ' <span onclick="copyPhone(\'' + escAttr(d.phone) + '\', this)" title="Copy" style="cursor:pointer;">📋</span>' +
-                        (waHref && !d.redeemed ? ' <a href="' + escAttr(waHref) + '" target="_blank" rel="noopener" title="Send WhatsApp reminder" style="text-decoration:none;">💬</a>' : '') +
-                        ' · ' + escHtml(getDayLabel(d.date) || d.date) + ' · ' + escHtml(String(d.plates)) + ' plate(s)' +
+                        escHtml(d.phone) + ' · ' + escHtml(getDayLabel(d.date) || d.date) + ' · ' + escHtml(String(d.plates)) + ' plate(s)' +
+                    '</div>' +
+                    '<div class="ico-row">' +
+                        '<a class="ico-btn call" href="tel:' + escAttr(d.phone) + '" title="Call">📞</a>' +
+                        (waHref && !d.redeemed ? '<a class="ico-btn wa" href="' + escAttr(waHref) + '" target="_blank" rel="noopener" title="Send WhatsApp reminder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></a>' : '') +
+                        '<span class="ico-btn" onclick="copyPhone(\'' + escAttr(d.phone) + '\', this)" title="Copy number">📋</span>' +
                     '</div>' +
                 '</div>' +
                 '<div class="code">' + escHtml(d.couponCode) + '</div>' +

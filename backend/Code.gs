@@ -84,6 +84,9 @@ function doGet(e) {
       case 'getDateSettings':
         result = getDateSettings();
         break;
+      case 'getDateLimit':
+        result = getDateLimit(params.date);
+        break;
       case 'toggleDate':
         result = toggleDate(params.date, params.enabled);
         break;
@@ -489,14 +492,8 @@ function registerWalkin(data) {
     var existing = findByPhoneInData_(sheetData, phone);
     var existingPlates = existing ? (parseInt(existing.plates, 10) || 0) : 0;
 
-    // Token limit (an existing row is REPLACED, so only count the difference)
-    var settings = getDateSettingsMap_()[date];
-    if (settings && settings.maxTokens > 0) {
-      var issuedCount = sumPlatesFromData_(sheetData) - existingPlates;
-      if (issuedCount + plates > settings.maxTokens) {
-        return { status: 'error', message: 'Today\'s coupon limit has been reached', date: date };
-      }
-    }
+    // NOTE: walk-ins are intentionally NOT capped by the daily coupon limit —
+    // volunteers may hand out a few extra. The scanner screen only shows a warning.
 
     var couponCode;
     if (existing) {
@@ -994,6 +991,17 @@ function getDateSettings() {
     cache.put('dateSettings_v1', JSON.stringify(result), 15); // seconds
   } catch (e) { /* ignore */ }
   return result;
+}
+
+/**
+ * LIGHTWEIGHT: just one date's coupon limit (0 = unlimited).
+ * Used by the scanner screen's "coupons left" badge. Unlike getDateSettings()
+ * this does NOT read any registration tabs — only the small DateSettings tab.
+ */
+function getDateLimit(date) {
+  var dateStr = normalizeDateStr_(date) || getTodayDate_();
+  var s = getDateSettingsMap_()[dateStr];
+  return { status: 'success', date: dateStr, maxTokens: (s && s.maxTokens) || 0 };
 }
 
 /** Clear the cached date settings after any write that would change them. */

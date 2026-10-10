@@ -902,6 +902,12 @@
         .walkin-recent .wr-code, #recentLookupsList .wr-code { font-weight:700; letter-spacing:1px; color:#1a1a2e; }
         .scope-note { font-size:12px; color:#888; margin:0 0 10px; }
         .retry-btn { margin-top:10px; padding:8px 16px; background:#667eea; color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:600; }
+        /* Today's coupon quota badge (next to Walk-in) */
+        .quota-pill { font-size:13px; font-weight:600; padding:3px 10px; border-radius:14px; background:#e8f5e9; color:#2e7d32; white-space:nowrap; }
+        .quota-pill.low  { background:#fff3e0; color:#e65100; }
+        .quota-pill.over { background:#ffebee; color:#c62828; font-weight:800; }
+        .quota-pill.none { background:#f0f0f0; color:#777; font-weight:500; }
+
         /* Entry cards (Search + All Entries): name / details / icon row */
         .search-result-item.entry-card { display:block; }
         .entry-card .name { font-weight:600; font-size:15px; }
@@ -1007,7 +1013,7 @@
 
             <!-- WALK-IN (always visible, under the search) -->
             <div class="walkin-area" id="walkinCard" style="text-align:left; margin-top:22px; padding-top:16px; border-top:2px dashed #ddd;">
-                <h2>➕ Walk-in</h2>
+                <h2 style="display:flex; align-items:center; flex-wrap:wrap; gap:10px;">➕ Walk-in <span id="quotaPill" class="quota-pill">🎟️ …</span></h2>
                 <p class="walkin-subtitle">Not registered? Enter the phone &amp; coupons — registers and redeems in one tap</p>
                 <div class="walkin-date-label" id="walkinDateLabel">📅 Loading...</div>
 
@@ -1248,6 +1254,7 @@
                 if (result && result.status === 'success') {
                     scannerData = result.data || [];
                     scannerDataLoaded = true;
+                    updateQuotaPill();
                     // If the admin already typed a full number while we were loading,
                     // re-run the search now that it can resolve instantly.
                     var input = document.getElementById('scannerSearchInput');
@@ -1261,10 +1268,74 @@
 
     function startScannerCacheRefresh() {
         loadScannerCache();
+        loadQuotaLimit();
+        quotaTick = 0;
         if (scannerCacheTimer) clearInterval(scannerCacheTimer);
         // Refresh in the background every 20s so redemptions/registrations
         // made from OTHER admins' devices show up here too.
-        scannerCacheTimer = setInterval(loadScannerCache, 20000);
+        scannerCacheTimer = setInterval(function() {
+            loadScannerCache();
+            if (++quotaTick % 9 === 0) loadQuotaLimit();   // re-read the limit about every 3 minutes
+        }, 20000);
+    }
+
+    // ── Today's coupon quota (max set in Dates tab) ───────────────
+    // used  = plates in today's in-memory copy (online + walk-ins), updated instantly on every walk-in
+    // max   = today's limit from the backend (0 = unlimited); fetched at login and every ~3 minutes
+    // Walk-ins are NEVER blocked by the quota — the badge only warns the volunteer.
+    var todayMaxTokens = null;   // null = not loaded yet
+    var quotaTick = 0;
+
+    function loadQuotaLimit() {
+        var t = getTodayStr();
+        jsonpRequest(
+            { action: 'getDateLimit', date: t },
+            function(result) {
+                if (result && result.status === 'success') {
+                    todayMaxTokens = parseInt(result.maxTokens, 10) || 0;
+                    updateQuotaPill();
+                } else {
+                    loadQuotaLimitFallback(t);   // backend not redeployed yet -> old (heavier) action
+                }
+            },
+            function() { /* silent — badge keeps its last value */ },
+            20000
+        );
+    }
+
+    function loadQuotaLimitFallback(t) {
+        jsonpRequest(
+            { action: 'getDateSettings' },
+            function(result) {
+                if (result && result.status === 'success') {
+                    var m = 0;
+                    (result.dates || []).forEach(function(d) { if (d.date === t) m = parseInt(d.maxTokens, 10) || 0; });
+                    todayMaxTokens = m;
+                    updateQuotaPill();
+                }
+            },
+            function() {},
+            20000
+        );
+    }
+
+    function updateQuotaPill() {
+        var pill = document.getElementById('quotaPill');
+        if (!pill) return;
+        if (todayMaxTokens === null || !cacheIsFresh()) { pill.className = 'quota-pill none'; pill.textContent = '🎟️ …'; return; }
+        if (todayMaxTokens <= 0) { pill.className = 'quota-pill none'; pill.textContent = '🎟️ No limit set'; return; }
+
+        var used = 0;
+        scannerData.forEach(function(d) { used += parseInt(d.plates, 10) || 0; });
+        var left = todayMaxTokens - used;
+
+        if (left <= 0) {
+            pill.className = 'quota-pill over';
+            pill.textContent = '⚠️ Quota over' + (left < 0 ? ' · ' + (-left) + ' extra' : '');
+        } else {
+            pill.className = 'quota-pill' + (left <= Math.max(10, Math.round(todayMaxTokens * 0.1)) ? ' low' : '');
+            pill.textContent = '🎟️ ' + left + ' left';
+        }
     }
 
     function cacheIsFresh() {
@@ -1290,6 +1361,7 @@
         }
         scannerData.push(entry);
     }
+    // (quota badge is refreshed by the caller right after upsertScannerEntry)
 
     function patchScannerData(couponCode, patch) {
         for (var i = 0; i < scannerData.length; i++) {
@@ -1339,7 +1411,7 @@
     function logoutAdmin() {
         if (isScanning) toggleScanner();
         if (scannerCacheTimer) { clearInterval(scannerCacheTimer); scannerCacheTimer = null; }
-        scannerData = []; scannerDataLoaded = false;
+        scannerData = []; scannerDataLoaded = false; todayMaxTokens = null;
         document.getElementById('loginScreen').style.display = 'flex';
         document.getElementById('adminPanel').style.display = 'none';
         document.getElementById('pinInput').value = '';
@@ -2245,6 +2317,7 @@
                     upsertScannerEntry({ timestamp: result.timestamp || new Date().toISOString(), name: name, phone: phone,
                         date: result.date, plates: plates, couponCode: result.couponCode, redeemed: true,
                         redeemedAt: result.timestamp || new Date().toISOString(), source: 'Walk-in' });
+                    updateQuotaPill();
 
                     // Auto-hide success after 3 seconds
                     if (walkinAutoHideTimer) clearTimeout(walkinAutoHideTimer);

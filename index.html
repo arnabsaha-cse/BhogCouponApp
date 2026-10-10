@@ -719,6 +719,15 @@
     // ============================================================
     // Form submission (uses shared jsonpCall helper)
     // ============================================================
+    // Live validation: hide an error as soon as the field becomes valid
+    // (errors still only APPEAR after the first Register click, so nobody gets nagged while typing)
+    document.getElementById('phone').addEventListener('input', function() {
+        if (normalizePhone10(this.value)) document.getElementById('phoneError').style.display = 'none';
+    });
+    document.getElementById('name').addEventListener('input', function() {
+        if (this.value.trim().length >= 2) document.getElementById('nameError').style.display = 'none';
+    });
+
     document.getElementById('regForm').addEventListener('submit', function(e) {
         e.preventDefault();
 

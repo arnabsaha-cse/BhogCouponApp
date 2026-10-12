@@ -22,7 +22,7 @@
  * │  'PROD'     = live event                                │
  * └─────────────────────────────────────────────────────────┘
  */
-const ACTIVE_ENV = 'NON_PROD';
+const ACTIVE_ENV = 'PROD';
 
 
 // ============================================================
@@ -91,7 +91,7 @@ const PROD = {
 
   // ---------- Google Sheet ----------
   // Your REAL spreadsheet for production data
-  SPREADSHEET_ID: 'YOUR_PROD_GOOGLE_SHEET_ID_HERE',
+  SPREADSHEET_ID: '1mLweQGbToix1qSMkGzflPD_jFaDtWFVBQ90bDIBvPwQ',
   SHEET_NAME: 'Registrations',
 
   // ---------- Twilio ----------

@@ -228,11 +228,16 @@
 
     // ── JSONP helper ──────────────────────────────────────────────
     var _cbId = 0;
+    // Sent WITHOUT Google login cookies so phones signed in to Google don't get a 404;
+    // if that ever fails, fall back to the classic way once.
+    var jsonpAnon = true;
     function jsonpCall(params, onSuccess, onError) {
         var cbName = 'couponCb_' + (++_cbId) + '_' + Date.now();
         params.callback = cbName;
+        var anon = jsonpAnon;
         var url = CONFIG.APPS_SCRIPT_URL + '?' + new URLSearchParams(params).toString();
         var script = document.createElement('script');
+        if (anon) script.crossOrigin = 'anonymous';
         script.src = url;
         var timeout = setTimeout(function() {
             cleanup();
@@ -244,7 +249,11 @@
             delete window[cbName];
         }
         window[cbName] = function(result) { cleanup(); onSuccess(result); };
-        script.onerror = function() { cleanup(); if (onError) onError('network'); };
+        script.onerror = function() {
+            cleanup();
+            if (anon) { jsonpAnon = false; jsonpCall(params, onSuccess, onError); return; }
+            if (onError) onError('network');
+        };
         document.body.appendChild(script);
     }
 

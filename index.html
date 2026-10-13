@@ -505,12 +505,21 @@
     // JSONP helper
     // ============================================================
     var _jsonpId = 0;
+    // Requests are sent WITHOUT Google login cookies (crossOrigin = 'anonymous').
+    // Browsers/phones signed in to Google (especially several accounts) otherwise get
+    // redirected to /macros/u/N/... and a 404. If the anonymous mode ever fails on a READ,
+    // we switch to the classic mode for the rest of the session. Writes are never re-sent.
+    var jsonpAnon = true;
+    var WRITE_ACTIONS = { register: 1, redeem: 1, walkin: 1, toggleDate: 1, setDateLimit: 1, setMemberRemark: 1 };
+
     function jsonpCall(params, onSuccess, onError) {
         var cbName = 'cb_' + (++_jsonpId) + '_' + Date.now();
         params.callback = cbName;
+        var anon = jsonpAnon, isWrite = !!WRITE_ACTIONS[params.action];
 
         var url = CONFIG.APPS_SCRIPT_URL + '?' + new URLSearchParams(params).toString();
         var script = document.createElement('script');
+        if (anon) script.crossOrigin = 'anonymous';
         script.src = url;
 
         var timeout = setTimeout(function() {
@@ -531,6 +540,11 @@
 
         script.onerror = function() {
             cleanup();
+            if (anon && !isWrite) {
+                jsonpAnon = false;
+                jsonpCall(params, onSuccess, onError);
+                return;
+            }
             if (onError) onError(new Error('Network error'));
         };
 

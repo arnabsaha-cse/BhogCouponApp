@@ -97,7 +97,7 @@ function doGet(e) {
         result = getMembersStatus(params.date);
         break;
       case 'setMemberRemark':
-        result = setMemberRemark(params.row, params.phone, params.remark);
+        result = setMemberRemark(params.row, params.phone, params.remark, params.date);
         break;
       case 'quickSearch':
         result = quickSearch(params.query, params.date, params.includeRedeemed);
@@ -1328,6 +1328,9 @@ function getMembersStatus(date) {
     }
   }
 
+  // Remarks are stored PER DAY in the "MemberRemarks" tab (Date | Phone | Remark | Updated)
+  var remarkMap = readRemarksForDate_(ss, date);
+
   var members = [];
   var counts = { total: 0, notRegistered: 0, pendingPickup: 0, redeemed: 0, noRemark: 0 };
 
@@ -1339,7 +1342,8 @@ function getMembersStatus(date) {
 
     var reg = regMap[last10_(phone)];
     var status = !reg ? 'not_registered' : (reg.redeemed ? 'redeemed' : 'registered');
-    var remarks = cellToStr_(row[4]).trim();
+    var rm = remarkMap[last10_(phone)];
+    var remarks = rm ? rm.text : '';
 
     counts.total++;
     if (status === 'not_registered') counts.notRegistered++;
@@ -1354,7 +1358,7 @@ function getMembersStatus(date) {
       email: cellToStr_(row[2]),
       notes: cellToStr_(row[3]),
       remarks: remarks,
-      remarksUpdated: cellToStr_(row[5]),
+      remarksUpdated: rm ? rm.updated : '',
       status: status,
       plates: reg ? reg.plates : 0,
       couponCode: reg ? reg.couponCode : '',
@@ -1365,44 +1369,70 @@ function getMembersStatus(date) {
   return { status: 'success', date: date, members: members, counts: counts };
 }
 
+var REMARKS_SHEET_NAME = 'MemberRemarks';
+
 /**
- * Save a remark (e.g. "Notified", "No answer") against a member so every
- * admin can see it. Members tab: column E = Remarks, column F = RemarksUpdated.
+ * Remarks for ONE date, keyed by last-10-digits of phone.
+ * Returns {} if the MemberRemarks tab doesn't exist yet. (Read-only: never creates the tab.)
  */
-function setMemberRemark(row, phone, remark) {
-  var config = getConfig();
-  var sheet = getSpreadsheet_().getSheetByName(config.MEMBERS_SHEET_NAME || 'Members');
-  if (!sheet) return { status: 'error', message: 'No "Members" tab found' };
+function readRemarksForDate_(ss, date) {
+  var map = {};
+  var sh = ss.getSheetByName(REMARKS_SHEET_NAME);
+  if (!sh || sh.getLastRow() < 2) return map;
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues();
+  for (var i = 0; i < vals.length; i++) {
+    if (normalizeDateStr_(vals[i][0]) !== date) continue;
+    var key = last10_(vals[i][1]);
+    var text = cellToStr_(vals[i][2]).trim();
+    if (key && text) map[key] = { text: text, updated: cellToStr_(vals[i][3]) };
+  }
+  return map;
+}
+
+/**
+ * Save a remark (e.g. "Notified", "No answer") for a member ON A SPECIFIC DATE,
+ * so every admin sees it and each day starts blank.
+ * Stored in the "MemberRemarks" tab: Date | Phone | Remark | Updated
+ * (the tab is created automatically the first time a remark is saved).
+ */
+function setMemberRemark(row, phone, remark, date) {
+  var key = last10_(phone);
+  if (!key) return { status: 'error', message: 'Member phone is missing' };
+  var dateStr = normalizeDateStr_(date) || getTodayDate_();
 
   var lock = LockService.getScriptLock();
   try { lock.waitLock(5000); }
   catch (e) { return { status: 'error', message: 'System busy — please try again' }; }
 
   try {
-    var phoneCol = (config.MEMBERS_PHONE_COLUMN || 2);
-    var target = last10_(phone);
-    var r = parseInt(row, 10);
-
-    // Trust the row number only if that row still has the same phone; otherwise search.
-    var ok = r >= 2 && r <= sheet.getLastRow() && last10_(sheet.getRange(r, phoneCol).getValue()) === target;
-    if (!ok) {
-      r = 0;
-      var vals = sheet.getRange(2, phoneCol, Math.max(sheet.getLastRow() - 1, 1), 1).getValues();
-      for (var i = 0; i < vals.length; i++) {
-        if (last10_(vals[i][0]) === target) { r = i + 2; break; }
-      }
+    var ss = getSpreadsheet_();
+    var sh = ss.getSheetByName(REMARKS_SHEET_NAME);
+    if (!sh) {
+      sh = ss.insertSheet(REMARKS_SHEET_NAME);
+      sh.getRange(1, 1, 1, 4).setValues([['Date', 'Phone', 'Remark', 'Updated']]).setFontWeight('bold');
+      sh.getRange(1, 1, sh.getMaxRows(), 2).setNumberFormat('@');   // keep date + phone as plain text
+      sh.setFrozenRows(1);
     }
-    if (!r) return { status: 'error', message: 'Member not found in the Members tab' };
 
-    // Ensure headers exist for the two remark columns
-    if (String(sheet.getRange(1, 5).getValue()).trim() !== 'Remarks') {
-      sheet.getRange(1, 5, 1, 2).setValues([['Remarks', 'RemarksUpdated']]).setFontWeight('bold');
-    }
     var text = String(remark || '').trim().slice(0, 300);
     var stamp = text ? new Date().toISOString() : '';
-    sheet.getRange(r, 5, 1, 2).setNumberFormat('@').setValues([[text, stamp]]);
 
-    return { status: 'success', row: r, remarks: text, remarksUpdated: stamp };
+    // Update the existing row for (date, phone) or append a new one
+    var target = 0;
+    var last = sh.getLastRow();
+    if (last >= 2) {
+      var vals = sh.getRange(2, 1, last - 1, 2).getValues();
+      for (var i = 0; i < vals.length; i++) {
+        if (normalizeDateStr_(vals[i][0]) === dateStr && last10_(vals[i][1]) === key) { target = i + 2; break; }
+      }
+    }
+    if (!target) {
+      if (!text) return { status: 'success', remarks: '', remarksUpdated: '', date: dateStr };   // nothing to clear
+      target = last + 1;
+    }
+    sh.getRange(target, 1, 1, 4).setNumberFormat('@').setValues([[dateStr, key, text, stamp]]);
+
+    return { status: 'success', remarks: text, remarksUpdated: stamp, date: dateStr };
   } finally {
     lock.releaseLock();
   }

@@ -106,8 +106,8 @@ const PROD = {
   APP_BASE_URL: 'https://yourusername.github.io/FoodCouponApp',
 
   // ---------- Feature Flags ----------
-  ENABLE_WHATSAPP: true,                                     // ON for live event
-  ENABLE_SMS: true,                                          // ON as fallback
+  ENABLE_WHATSAPP: false,                                     // ON for live event
+  ENABLE_SMS: false,                                          // ON as fallback
   ENABLE_DUPLICATE_CHECK: true,                              // Prevent double registration
   ENABLE_LOGGING: false,                                     // Less logging in prod
 

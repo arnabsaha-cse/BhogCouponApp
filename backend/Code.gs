@@ -680,7 +680,7 @@ function quickSearch(query, date, includeRedeemed) {
 function getSummary(date) {
   var scope = (date && date !== 'all') ? date : 'all';
   var cache = CacheService.getScriptCache();
-  var key = 'summary_v2_' + scope;
+  var key = 'summary_v3_' + scope;
   var cached = cache.get(key);
   if (cached) return JSON.parse(cached);
 
@@ -693,8 +693,8 @@ function getSummary(date) {
 function invalidateSummaryCache_() {
   try {
     var cfg = getConfig();
-    var keys = ['summary_v2_all', 'summary_v2_' + getTodayDate_()];
-    (cfg.EVENT_DATES || []).forEach(function(d) { keys.push('summary_v2_' + d); });
+    var keys = ['summary_v3_all', 'summary_v3_' + getTodayDate_()];
+    (cfg.EVENT_DATES || []).forEach(function(d) { keys.push('summary_v3_' + d); });
     CacheService.getScriptCache().removeAll(keys);
   } catch (e) { /* ignore */ }
 }
@@ -723,12 +723,13 @@ function computeSummary_(scope) {
     // Only read the 5 columns we need: Plates..Source
     var rows = last >= 2 ? dateSheets[i].getRange(2, COL.PLATES, last - 1, 5).getValues() : [];
 
-    var registered = 0, walkins = 0, totalCoupons = 0, redeemed = 0;
+    var registered = 0, walkins = 0, totalCoupons = 0, redeemed = 0, couponsRedeemed = 0;
     for (var r = 0; r < rows.length; r++) {
       var source = rows[r][COL.SOURCE - COL.PLATES] || 'Online';
       if (source === 'Walk-in') walkins++; else registered++;
-      totalCoupons += parseInt(rows[r][0], 10) || 0;
-      if (String(rows[r][COL.REDEEMED - COL.PLATES]).toLowerCase() === 'yes') redeemed++;
+      var rowPlates = parseInt(rows[r][0], 10) || 0;
+      totalCoupons += rowPlates;
+      if (String(rows[r][COL.REDEEMED - COL.PLATES]).toLowerCase() === 'yes') { redeemed++; couponsRedeemed += rowPlates; }
     }
 
     var maxTokens = (settingsMap[tabDate] && settingsMap[tabDate].maxTokens) || 0;
@@ -738,8 +739,10 @@ function computeSummary_(scope) {
       walkins: walkins,
       totalRegistrations: registered + walkins,
       totalCoupons: totalCoupons,
-      redeemed: redeemed,
-      pending: (registered + walkins) - redeemed,
+      redeemed: redeemed,                                   // people (registrations) redeemed
+      pending: (registered + walkins) - redeemed,           // people pending
+      couponsRedeemed: couponsRedeemed,                     // plates actually collected
+      couponsNotRedeemed: totalCoupons - couponsRedeemed,   // plates issued but not collected
       maxTokens: maxTokens
     };
     days.push(obj);
@@ -754,7 +757,7 @@ function computeSummary_(scope) {
   if (!focus && single) {
     var mt = (settingsMap[focusDate] && settingsMap[focusDate].maxTokens) || 0;
     focus = { date: focusDate, registered: 0, walkins: 0, totalRegistrations: 0, totalCoupons: 0,
-              redeemed: 0, pending: 0, maxTokens: mt, remaining: mt > 0 ? mt : undefined };
+              redeemed: 0, pending: 0, couponsRedeemed: 0, couponsNotRedeemed: 0, maxTokens: mt, remaining: mt > 0 ? mt : undefined };
   }
 
   return {
@@ -1162,6 +1165,10 @@ function fixDateTabFormats() {
 // MESSAGING FUNCTIONS (Twilio WhatsApp + SMS)
 // ============================================================
 
+// Shown in every coupon message (change here if timing or location changes)
+var MSG_TIME_TEXT = '1 PM to 2 PM';
+var MSG_LOCATION_URL = 'https://tinyurl.com/agomonihyderabad';
+
 /**
  * Send WhatsApp and/or SMS notification for multi-date registration.
  * Sends one consolidated message with per-coupon links.
@@ -1172,25 +1179,26 @@ function fixDateTabFormats() {
  */
 function sendMultiDateNotifications(name, phone, coupons) {
   var config = getConfig();
+  var fullName = String(name || '').replace(/\s+/g, ' ').trim() || 'Devotee';
 
-  // Build per-coupon lines with individual coupon links
+  // Plain text only (no emojis / special symbols) so WhatsApp always shows it correctly
   var couponLines = coupons.map(function(c) {
     // Append T12:00:00 so date parsing is midday IST and avoids UTC-midnight off-by-one
     var formattedDate = Utilities.formatDate(
-      new Date(c.date + 'T12:00:00'), Session.getScriptTimeZone(), 'EEE, MMM d'
+      new Date(c.date + 'T12:00:00'), Session.getScriptTimeZone(), 'EEEE, MMM d'
     );
     var couponUrl = config.APP_BASE_URL + '/coupon.html?code=' + encodeURIComponent(c.couponCode);
-    return (
-      '\uD83D\uDCC5 ' + formattedDate + ' \u2014 ' + c.coupons + ' coupon(s) \u2014 *' + c.couponCode + '*\n' +
-      '\uD83D\uDC49 ' + couponUrl
-    );
+    return formattedDate + ': ' + c.couponCode + ' (' + c.coupons + ' plate(s))\n' +
+           'Show this at the counter: ' + couponUrl;
   }).join('\n\n');
 
   var messageBody =
-    '\uD83E\uDEB7 *Agomoni Durga Puja \u2014 Bhog Confirmed!*\n\n' +
-    '\u2705 Name: ' + name + '\n\n' +
-    'Your Coupons:\n' + couponLines + '\n\n' +
-    'Joy Ma Durga! \uD83D\uDE4F';
+    'Namaskar ' + fullName + ',\n' +
+    'Your Agomoni Durga Puja bhog coupon is confirmed.\n\n' +
+    couponLines + '\n\n' +
+    'Time: ' + MSG_TIME_TEXT + '\n' +
+    'Follow this link for the location: ' + MSG_LOCATION_URL + '\n' +
+    'Joy Ma Durga!';
 
   // Try WhatsApp first
   if (config.ENABLE_WHATSAPP) {
@@ -1217,9 +1225,10 @@ function sendMultiDateNotifications(name, phone, coupons) {
       }).join('\n');
 
       var smsBody =
-        'Bhog Coupons Confirmed!\n' +
-        'Name: ' + name + '\n' +
-        smsLines;
+        'Namaskar ' + fullName + ', your Agomoni bhog coupon is confirmed.\n' +
+        smsLines + '\n' +
+        'Time: ' + MSG_TIME_TEXT + '\n' +
+        'Location: ' + MSG_LOCATION_URL;
 
       sendTwilioMessage(
         normalizePhone(phone),
